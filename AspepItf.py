@@ -3,7 +3,22 @@ from AspepAux import EAspepPktType, PktDscrpt
 from enum import Enum
 import struct
 
+################################
+# Description:
+# The transport layers are protocols on which MCP relies to transport its messages between the Controller and the Performer. 
+# Their task is to adapt MCP communication to the physical link being used to transport it.
+#
+# Communication with ASPEP involves two Hosts, a Controller and a Performer, that exchange Packets.
+#
+# The protocols of the Transport Layers provide at least two channels that are multiplexed over the physical link: 
+# a Synchronous channel and an asynchronous channel. 
+# The Synchronous channel is used by MCP to transport the messages of the command service. 
+# The Asynchronous channel is used by MCP to transport the messages of the Datalog and Notification services.
+#
+
+################################
 # enumeration
+
 class EAspepRole( Enum ):
 	Ctrl = 0	# controller
 	Perf = 1	# performer
@@ -15,21 +30,23 @@ class EAspepChannel( Enum ):
 	Ctrl = 2	# is used to establish and manage the connection
 	pass
 
+# MCP response codes
+# The first response code, CMD_OK indicates the successful execution of the preceding command. All other codes indicate an error.
 class EAspepMcpResp( Enum ):
-	Ok = 0x00			# execution of the command was successful
-	Nok = 0x01			# execution of the command failed
-	Unknown = 0x02		# command is unknow
-	Unused = 0x03		# reserved
-	RoReg = 0x04		# read-only register
-	UnknownReg = 0x05	# target register is unknow
-	StrFormat = 0x06	# the format of a text string in the command payload is wrong
-	BadDataType = 0x07	# the type of a register in the command payload is wrong
-	NoTxSyncSpace = 0x08	# the size of the response to the command exceeds the maximum payload size
-	NoTxAsyncSpace = 0x09	# the number of signals requested for the datalog exceeds the maximum supprted by the performer
-	WrongStructFormat = 0x0A	# the reported size of a structure transmitted in the command does not match its actual size
-	WoReg = 0x0B				# target register is write only. Its value cannot be read
+	Ok = 0x00					# CMD_OK execution of the command was successful
+	Nok = 0x01					# CMD_NOK xecution of the command failed
+	Unknown = 0x02				# CMD_UNKNOWN command is unknow
+	Unused = 0x03				# reserved
+	RoReg = 0x04				# RO_REG read-only register
+	UnknownReg = 0x05			# UNKNOWN_REG target register is unknown
+	StrFormat = 0x06			# STRING_FORMAT the format of a text string in the command payload is wrong
+	BadDataType = 0x07			# BAD_DATA_TYPE the type of a register in the command payload is wrong
+	NoTxSyncSpace = 0x08		# NO_TXSYNC_SPACE the size of the response to the command exceeds the maximum payload size
+	NoTxAsyncSpace = 0x09		# NO_TXASYNC_SPACE the number of signals requested for the datalog exceeds the maximum supprted by the performer
+	WrongStructFormat = 0x0A	# WRONG_STRUCT_FORMAT the reported size of a structure transmitted in the command does not match its actual size
+	WoReg = 0x0B				# WO_REG target register is write only. Its value cannot be read
 	Unused2 = 0x0C				# reserved
-	UserCmdNotImpl = 0x0D		# command is a non implemented user command
+	UserCmdNotImpl = 0x0D		# USER_CMD_NOT_IMPL command is a non implemented user command
 	pass
 
 class EAspepRegType( Enum ):
@@ -55,6 +72,7 @@ class EAspepState( Enum ):
 	Conf = 1
 	Connecting = 2
 	Connected = 3
+	Recovery = 4
 	pass
 
 class EAspepSubState( Enum ):
@@ -157,6 +175,10 @@ class AspepItf():
 	def RunStateMachine( self ):
 		# handle recv pkgs
 		self.__runDecodeMchn()
+
+		# The "Synchronous" channel has priority over the "Control" channel that has priority over the "Asynchronous" one. 
+		# This means that if several packets are ready for transmission on either side of a connection, 
+		# when the serial link is available (not busy), the packet belonging to the channel with the highest priority will be sent first.
 
 		# run state machine after recv pkgs decoded
 		match self.state:
