@@ -1,4 +1,5 @@
 import time
+import copy
 import serial
 from AspepCodec import EAspepPktType, CPktDscrpt
 from enum import Enum
@@ -86,7 +87,7 @@ class CAspepItf():
             parity = serial.PARITY_NONE, \
             stopbits = serial.STOPBITS_ONE, \
             timeout = 1 )
-		time.sleep(0.05)
+		time.sleep( 0.05 )
 		self.comm.reset_input_buffer()
 		self.comm.reset_output_buffer()
 
@@ -101,15 +102,12 @@ class CAspepItf():
 		self.beacon = CPktDscrpt( EAspepPktType.Beacon, 0, 0, 0, 0, 0 )
 		self.ping = CPktDscrpt( EAspepPktType.Ping, 0, 0, 0, 0 )
 		self.request = CPktDscrpt( EAspepPktType.Request )
+		self.response = CPktDscrpt( EAspepPktType.Response )
 
 		# init timing related variables
 		self.timBeacon = 0
 		self.timPing = 0
 		self.tSyncWaitAck = 0
-
-		# init synchronous channel control and buffer
-		self.recvLen = 0
-		self.recvBuf = bytearray( self.RECV_BUF_SIZE )
 		pass
 
 	def connect( self, enableCrc, rxsMax, txsMax, txaMax, timBeacon = 1000, timPing = 1000 ):
@@ -131,7 +129,8 @@ class CAspepItf():
 		if self.isResponseReady() == False:
 			return False
 
-		return True, self.recvBuf
+		self.syncState = EAspepSyncState.Idle
+		return True, self.response.payload
 
 	def isResponseReady( self ) -> bool:
 		if self.state != EAspepState.Connected:
@@ -189,7 +188,7 @@ class CAspepItf():
 						return
 					else:
 						# the capability on both side is differ, merge the beacon
-						self.beacon = recvPkt
+						self.beacon = copy.copy( recvPkt )
 						packedByte = self.beacon.encode()
 						self.comm.write( packedByte )
 										
@@ -240,8 +239,7 @@ class CAspepItf():
 					if recvPkt.type != EAspepPktType.Response:
 						return
 
-					self.recvLen = recvPkt.payloadLen
-					self.recvBuf = recvPkt.payload
+					self.response = copy.copy( recvPkt )
 					self.syncState = EAspepSyncState.ResponseInBuf
 					return
 				

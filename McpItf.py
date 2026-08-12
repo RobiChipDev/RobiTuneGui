@@ -1,6 +1,8 @@
 import time
 import threading
 import struct
+import bitstruct
+import copy
 from AspepItf import CAspepItf
 from enum import Enum
 
@@ -63,6 +65,13 @@ class EAspepRegType( Enum ):
 	Reserved3 = 7
 	pass
 
+# MCP register identifier to register type dictionary
+mcpRegIdDict = { \
+	0: EAspepRegType.RawStruct, 1: EAspepRegType.RawStruct, 2: EAspepRegType.RawStruct, \
+	3: EAspepRegType.RawStruct, 20: EAspepRegType.RawStruct, 21: EAspepRegType.RawStruct, \
+	22:EAspepRegType.RawStruct, 25: EAspepRegType.RawStruct, 26: EAspepRegType.RawStruct, \
+	27: EAspepRegType.RawStruct }
+
 class CMcpItf():
 # constants and definitions
 	TICK_INTERVAL = 0.1	# second
@@ -72,9 +81,12 @@ class CMcpItf():
 		self.aspepItf = CAspepItf( "COM3" )
 		self.aspepItf.connect()
 
+		# initialize MCP information container
+		self.mcpVer = bytes()
+
 		# initialize a timer to run the ASPEP machine periodically
 		self.tickStopSignal = threading.Event()
-		self.workTick = threading.Thread( target = self.__Tick, args = ( self.tickStopSignal ) )
+		self.workTick = threading.Thread( target = self.__tick, args = ( self.tickStopSignal ) )
 		self.workTick.start()
 		pass
 
@@ -99,54 +111,88 @@ class CMcpItf():
 		# Command payload: 0
 		# Response payload: 4 bytes
 		# Status code: always CMD_OK
-		packedBytes = self.__packCommand( motorId = self.motorId, cmdId = 0x0000, payload = b"" )
-		self.aspepItf.sendRequest( packedBytes )
-		while self.aspepItf.isResponseReady() == False:
-			time.sleep( 0.1 )
-			pass
+		sendBytes = self.__packCommand( motorId = self.motorId, cmdId = 0x0000, payload = b"" )
+		recvBytes = self.__sendRecv( sendBytes )
 
-		_, McpVer = self.aspepItf.readResponse()
+		self.mcpVer = recvBytes[ :4 ]
+		status = recvBytes[ 4: ]
 		pass
 
-	def Cmd_SetRegister( self, RegNum ):
+	def Cmd_SetRegister( self, *args ):
 		# SET_REGISTER
 		# Command payload: 
 		# 	|-2 bytes-|-2 bytes-|-Nx2 bytes-|
 		# 	|-RegId 1-|-RegId 2-|-RegId 2+N-|
 		# Response payload: 
 		# 	|-10 bits----|-3 bits----|-3 bits-|-2 bytes--|-M bytes-|
+		# 	|-RegId 1-|-Data Type-|-Motor#-|-Buf Size-|-Buf-----|
+		# RegId (Register Identifier) format:
+		# 	|-10 bits----|-3 bits----|-3 bits-|
+		# 	|-Identifier-|-Data Type-|-Motor#-|
+		packedByte = bitstruct.pack( 'u10u3u3', args[ 0 ], mcpRegIdDict.get( args[ 0 ] ), self.motorId )
+		sendBytes = self.__packCommand( motorId = self.motorId, cmdId = 0x0001, payload = packedByte )
+		recvBytes = self.__sendRecv( sendBytes )
+		pass
+
+	def Cmd_GetRegister( self, *args ):
+		# GET_REGISTER
+		# Command payload: 
+		# 	|-2 bytes-|-2 bytes-|-Nx2 bytes-|
+		# 	|-RegId 1-|-RegId 2-|-RegId 2+N-|
+		# Response payload: 
+		# 	|-10 bits----|-3 bits----|-3 bits-|-2 bytes--|-M bytes-|
 		# 	|-Identifier-|-Data Type-|-Motor#-|-Buf Size-|-Buf-----|
-		CmdId = 0x0001
+		CmdId = 0x0002
 		PayloadLen = 0
 		pass
 
-	def Cmd_StartMotor( self, Motor ):
+	def Cmd_StartMotor( self ):
 		# START_MOTOR
-		CmdId = 0x0003
-		PayloadLen = 0
+		# Command payload: 0
+		# Response payload: 0
+		# Status code: CMD_OK / CMD_NOK
+		packedBytes = self.__packCommand( motorId = self.motorId, cmdId = 0x0003, payload = b"" )
+		recvBytes = self.__sendRecv( packedBytes )
 		pass
 
-	def Cmd_StopMotor( self, Motor ):
+	def Cmd_StopMotor( self ):
 		# STOP_MOTOR
-		CmdId = 0x0004
-		PayloadLen = 0
+		# Command payload: 0
+		# Response payload: 0
+		# Status code: CMD_OK / CMD_NOK
+		packedBytes = self.__packCommand( motorId = self.motorId, cmdId = 0x0004, payload = b"" )
+		recvBytes = self.__sendRecv( packedBytes )
 		pass
 
-	def Cmd_StopRamp( self, Motor ):
+	def Cmd_StopRamp( self ):
 		# STOP_RAMP
-		CmdId = 0.0005
-		PayloadLen = 0
+		# Command payload: 0
+		# Response payload: 0
+		# Status code: always CMD_OK
+		packedBytes = self.__packCommand( motorId = self.motorId, cmdId = 0x0005, payload = b"" )
+		recvBytes = self.__sendRecv( packedBytes )
 		pass
 
 	def Cmd_StartStop( self, Motor ):
 		# START_STOP
-		CmdId = 0x0006
-		PayloadLen = 0
+		# Command payload: 0
+		# Response payload: 0
+		# Status code: CMD_OK / CMD_NOK
+		packedBytes = self.__packCommand( motorId = self.motorId, cmdId = 0x0006, payload = b"" )
+		recvBytes = self.__sendRecv( packedBytes )
 		pass
-	pass
+
+	def Cmd_FaultAck( self ):
+		# FAULT_ACK
+		# Command payload: 0
+		# Response payload: 0
+		# Status code: always CMD_OK
+		packedBytes = self.__packCommand( motorId = self.motorId, cmdId = 0x0007, payload = b"" )
+		recvBytes = self.__sendRecv( packedBytes )
+		pass
 
 # private function
-	def __Tick( self, stopEvent ):
+	def __tick( self, stopEvent ) -> None:
 		nextRun = time.perf_counter()
 
 		while not stopEvent.is_set():
@@ -165,3 +211,12 @@ class CMcpItf():
 		binedId = ( motorId << 13 ) | cmdId
 		packedData = struct.pack( 'H', binedId, payload )
 		return packedData
+
+	def __sendRecv( self, txPackedBytes: bytes ) -> bytes:
+		self.aspepItf.sendRequest( txPackedBytes )
+		while self.aspepItf.isResponseReady() == False:
+			time.sleep( 0.1 )
+			pass
+		
+		_, rxPackedBytes = self.aspepItf.readResponse()
+		return rxPackedBytes
