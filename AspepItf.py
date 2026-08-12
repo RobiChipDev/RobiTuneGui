@@ -1,9 +1,12 @@
-from SerialItf import SerialItf
-from AspepAux import EAspepPktType, PktDscrpt
+import time
+import serial
+from AspepCodec import EAspepPktType, CPktDscrpt
 from enum import Enum
 import struct
 
 ################################
+# Author: Boyce, RobiChip
+# Date: 2026/08/12
 # Description:
 # The transport layers are protocols on which MCP relies to transport its messages between the Controller and the Performer. 
 # Their task is to adapt MCP communication to the physical link being used to transport it.
@@ -30,36 +33,6 @@ class EAspepChannel( Enum ):
 	Ctrl = 2	# is used to establish and manage the connection
 	pass
 
-# MCP response codes
-# The first response code, CMD_OK indicates the successful execution of the preceding command. All other codes indicate an error.
-class EAspepMcpResp( Enum ):
-	Ok = 0x00					# CMD_OK execution of the command was successful
-	Nok = 0x01					# CMD_NOK xecution of the command failed
-	Unknown = 0x02				# CMD_UNKNOWN command is unknow
-	Unused = 0x03				# reserved
-	RoReg = 0x04				# RO_REG read-only register
-	UnknownReg = 0x05			# UNKNOWN_REG target register is unknown
-	StrFormat = 0x06			# STRING_FORMAT the format of a text string in the command payload is wrong
-	BadDataType = 0x07			# BAD_DATA_TYPE the type of a register in the command payload is wrong
-	NoTxSyncSpace = 0x08		# NO_TXSYNC_SPACE the size of the response to the command exceeds the maximum payload size
-	NoTxAsyncSpace = 0x09		# NO_TXASYNC_SPACE the number of signals requested for the datalog exceeds the maximum supprted by the performer
-	WrongStructFormat = 0x0A	# WRONG_STRUCT_FORMAT the reported size of a structure transmitted in the command does not match its actual size
-	WoReg = 0x0B				# WO_REG target register is write only. Its value cannot be read
-	Unused2 = 0x0C				# reserved
-	UserCmdNotImpl = 0x0D		# USER_CMD_NOT_IMPL command is a non implemented user command
-	pass
-
-class EAspepRegType( Enum ):
-	Reserved = 0
-	Bit8 = 1
-	Bit16 = 2
-	Bit32 = 3
-	Text = 4
-	RawStruct = 5
-	Reserved2 = 6
-	Reserved3 = 7
-	pass
-
 class EAspepErrCode( Enum ):
 	BadPktType = 1
 	BadPktSize = 2
@@ -69,14 +42,18 @@ class EAspepErrCode( Enum ):
 
 class EAspepState( Enum ):
 	Idle = 0
-	Conf = 1
-	Connecting = 2
-	Connected = 3
+	Conf = 1		# ASPEP Connection Procedure
+	Connecting = 2	# ASPEP Connection Procedure
+	Connected = 3	# ASPEP Synchronous Transaction
 	Recovery = 4
 	pass
 
-class EAspepSubState( Enum ):
+class EAspepSyncState( Enum ):
 	Idle = 0
+	RequestInBuf = 1
+	IntraPause = 2		# REQUEST header was sent, and an in-frame pause was inserted.
+	WaitResponse = 3
+	ResponseInBuf = 4
 	pass
 
 class EAspepReq( Enum ):
@@ -94,87 +71,77 @@ class AspepReg():
 		pass
 
 # main interface
-class AspepItf():
+class CAspepItf():
 # consts and definitions
-	RESP_TIMEOUT = 10000
+	CONN_TIMEOUT = 10000
 	RECV_BUF_SIZE = 100
 
 # public functions
-	def __init__( self, port ):
+	def __init__( self, portNum ):
 		# init serial interface
-		self.comm = SerialItf()
+		self.comm = serial.Serial( \
+			port = portNum, \
+			baudrate = 9600, \
+			bytesize = serial.EIGHTBITS, \
+            parity = serial.PARITY_NONE, \
+            stopbits = serial.STOPBITS_ONE, \
+            timeout = 1 )
+		time.sleep(0.05)
+		self.comm.reset_input_buffer()
+		self.comm.reset_output_buffer()
 
 		# init state machine variables
 		self.role = EAspepRole.Ctrl
 		self.state = EAspepState.Idle
+		self.syncState = EAspepSyncState.Idle
 		self.timer = 0
 		self.req = EAspepReq.Non
 
-		# init beacon packet
-		self.beacon = PktDscrpt().setBeacon( enCrc = True, rxsMax = 0, txsMax = 0, txaMax = 0 )
-
-		# init ping packet
-		self.ping = PktDscrpt().setPing( c = 0, n = 0, LLID = 0, pktNum = 0 )
+		# init empty BEACON/PING/REQUEST packet
+		self.beacon = CPktDscrpt( EAspepPktType.Beacon, 0, 0, 0, 0, 0 )
+		self.ping = CPktDscrpt( EAspepPktType.Ping, 0, 0, 0, 0 )
+		self.request = CPktDscrpt( EAspepPktType.Request )
 
 		# init timing related variables
-		self.tBeacon = 0
-		self.tPing = 0
+		self.timBeacon = 0
+		self.timPing = 0
 		self.tSyncWaitAck = 0
 
-		# init receiver
+		# init synchronous channel control and buffer
 		self.recvLen = 0
 		self.recvBuf = bytearray( self.RECV_BUF_SIZE )
 		pass
 
-	def open( self, enableCrc, rxsMax, txsMax, txaMax, tBeacon = 1000, tPing = 1000 ):
+	def connect( self, enableCrc, rxsMax, txsMax, txaMax, timBeacon = 1000, timPing = 1000 ):
+		self.beacon.set( EAspepPktType.Beacon, 0, enableCrc, rxsMax, txsMax, txaMax )
+		self.timBeacon = timBeacon
+		self.timPing = timPing
 		self.req = EAspepReq.Conf
-		self.beacon.enCrc = enableCrc
-		self.beacon.rxsMax = rxsMax
-		self.beacon.txsMax = txsMax
-		self.beacon.txaMax = txaMax
-		self.tBeacon = tBeacon
-		self.tPing = tPing
 		pass
 
-	def Cmd_GetMcpVer( self ):
-		# GET_MCP_VERSION
-		CmdId = 0x0000
-		PayloadLen = 0
-		pass
+	def sendRequest( self, payload: bytes ) -> bool:
+		if self.state != EAspepState.Connected:
+			return False
 
-	def Cmd_SetRegister( self, RegNum ):
-		# SET_REGISTER
-		CmdId = 0x0001
-		PayloadLen = 0
-		pass
+		self.request.set( EAspepPktType.Request, len( payload ), payload )
+		self.syncState = EAspepSyncState.RequestInBuf
+		return True
 
-	def Cmd_StartMotor( self, Motor ):
-		# START_MOTOR
-		CmdId = 0x0003
-		PayloadLen = 0
-		pass
+	def readResponse( self ) -> tuple[ bool, bytes ]:
+		if self.isResponseReady() == False:
+			return False
 
-	def Cmd_StopMotor( self, Motor ):
-		# STOP_MOTOR
-		CmdId = 0x0004
-		PayloadLen = 0
-		pass
+		return True, self.recvBuf
 
-	def Cmd_StopRamp( self, Motor ):
-		# STOP_RAMP
-		CmdId = 0.0005
-		PayloadLen = 0
-		pass
+	def isResponseReady( self ) -> bool:
+		if self.state != EAspepState.Connected:
+			return False
 
-	def Cmd_StartStop( self, Motor ):
-		# START_STOP
-		CmdId = 0x0006
-		PayloadLen = 0
-		pass
-
-	def RunStateMachine( self ):
+		return self.syncState == EAspepSyncState.ResponseInBuf
+		
+	def runStateMachine( self ):
 		# handle recv pkgs
-		self.__runDecodeMchn()
+		recvPkt = self.__runDecodeMchn()
 
 		# The "Synchronous" channel has priority over the "Control" channel that has priority over the "Asynchronous" one. 
 		# This means that if several packets are ready for transmission on either side of a connection, 
@@ -184,135 +151,114 @@ class AspepItf():
 		match self.state:
 			case EAspepState.Idle:
 				if self.req == EAspepReq.Conf:
-					# start handshake to establish connection
-					self.__transit( EAspepState.Conf )
+					# sending master's capabilities
+					packedByte = self.beacon.encode()
+					self.comm.write( packedByte )
+
+					self.timer = 0
+					self.req = EAspepReq.Non
+					self.state = EAspepState.Conf
+					return
+
 				pass
 
 			case EAspepState.Conf:
-				if self.req == EAspepReq.Connecting:
-					# BEACON acknowledged by both controller and performer
-					self.__transit( EAspepState.Connecting )
-					pass
+				self.timer += 1000
+				if self.timer > self.CONN_TIMEOUT:
+					# timeout condition
+					self.timer = 0
+					self.req = EAspepReq.Non
+					self.state = EAspepState.Idle
+					return
 
-				elif self.req == EAspepReq.Conf:
-					# merge BEACON info. from performer
-					self.__transit( EAspepState.Conf )
-					pass
+				if ( recvPkt.type == EAspepPktType.Undefine ) and ( self.timer > self.timBeacon ):
+					# no response from performer, send a repetion of beacon
+					packedByte = self.beacon.encode()
+					self.comm.write( packedByte )
+					return	
 
-				else:
-					self.timer += 1000
-					if self.timer > self.RESP_TIMEOUT:
-						self.__transit( EAspepState.Idle )
-						pass
+				if recvPkt.type == EAspepPktType.Beacon:
+					if ( self.beacon == recvPkt ) == True:
+						# both Controller and Performer acknowledge capability
+						packedByte = self.ping.encode()
+						self.comm.write( packedByte )
+										
+						self.timer = 0
+						self.req = EAspepReq.Non
+						self.state = EAspepState.Connecting
+						return
+					else:
+						# the capability on both side is differ, merge the beacon
+						self.beacon = recvPkt
+						packedByte = self.beacon.encode()
+						self.comm.write( packedByte )
+										
+						self.timer = 0
+						self.req = EAspepReq.Non
+						self.state = EAspepState.Conf
+						return
 				pass
 
 			case EAspepState.Connecting:
-				if self.req == EAspepReq.Connected:
-					self.__transit( EAspepState.Connected )
-					pass
+				self.timer += 1000
+				if self.timer > self.CONN_TIMEOUT:
+					# timeout condition
+					self.timer = 0
+					self.req = EAspepReq.Non
+					self.state = EAspepState.Idle
+					return
 
-				else:
-					self.timer += 1000
-					if self.timer > self.RESP_TIMEOUT:
-						self.__transit( EAspepState.Idle )
-						pass
+				if ( recvPkt.type == EAspepPktType.Undefine ) and ( self.timer > self.timPing ):
+					# no response from performer, send a repetion of beacon
+					packedByte = self.ping.encode()
+					self.comm.write( packedByte )
+					return	
+
+				if recvPkt.type == EAspepPktType.Ping:
+					if ( recvPkt.c != 0 ) == True:
+						self.timer = 0
+						self.req = EAspepReq.Non
+						self.state = EAspepState.Connected
+						return
+					pass
 				pass
 
 			case EAspepState.Connected:
-				self.__runSubRoutine()
+				if self.syncState == EAspepSyncState.RequestInBuf:
+					fPacket, _ = self.request.encode()
+					self.comm.write( fPacket )
+					self.syncState = EAspepSyncState.IntraPause
+					return
+
+				if self.syncState == EAspepSyncState.IntraPause:
+					_, sPacket = self.request.encode()
+					self.comm.write( sPacket )
+					self.syncState = EAspepSyncState.WaitResponse
+					return
+
+				if self.syncState == EAspepSyncState.WaitResponse:
+					if recvPkt.type != EAspepPktType.Response:
+						return
+
+					self.recvLen = recvPkt.payloadLen
+					self.recvBuf = recvPkt.payload
+					self.syncState = EAspepSyncState.ResponseInBuf
+					return
+				
 				pass
 
 			case _:
+				# state out of range handling
 				self.state = EAspepState.Idle
 				pass
 		pass
 
 # private functions
-	def __runDecodeMchn( self ):
+	def __runDecodeMchn( self ) -> CPktDscrpt:
+		dscrpt = CPktDscrpt()
 		self.recvLen = self.comm.read()
 		if self.recvLen == 0:
-			return
+			return dscrpt
 		
-		dscrpt = PktDscrpt( self.recvLen, self.recvBuf )
-		match dscrpt.type:
-			case EAspepPktType.Beacon:
-				if ( self.beacon == dscrpt ) == True:
-					self.req = EAspepReq.Connecting
-				else:
-					self.beacon = dscrpt
-					self.req = EAspepReq.Conf
-				pass
-
-			case EAspepPktType.Ping:
-				if ( dscrpt.c != 0 ) == True:
-					self.req = EAspepReq.Connected
-				pass
-
-			case EAspepPktType.Error:
-				pass
-
-			case EAspepPktType.Async:
-				pass
-
-			case EAspepPktType.Response:
-				pass
-
-			case _:
-				pass
-		pass
-
-	def __runSubRoutine( self ):
-		if self.recvLen == 0:
-			
-			return
-		pass
-
-	def __transit( self, targetState ):
-		self.req = EAspepReq.Non
-		self.timer = 0
-
-		match targetState:
-			case EAspepState.Idle:
-				self.state = EAspepState.Idle
-
-			case EAspepState.Conf:
-				self.beacon.setBeacon( self.enCrc, self.rxsMax, self.txsMax, self.txaMax )
-				buf = self.beacon.encode()
-				self.state = EAspepState.Conf
-
-			case EAspepState.Connecting:
-				self.ping.setPing( 0, 0, 0, 0 )
-				buf = self.ping.encode()
-				self.state = EAspepState.Connecting
-
-			case EAspepState.Connected:
-				self.state = EAspepState.Connected
-
-			case _:
-				raise ValueError( "unexpected target state" )
-
-		if len( buf ) > 0:	
-			self.comm.write( buf )
-		pass
-
-	def __formatHeader():
-		# total 4 bytes
-		# |-4 bit--|-24 bit--|-4 bit-|
-		# |--Type--|-content-|-CRCH--|
-		# CRC: CCITT-G.704 X^4 + X + 1
-
-		pass
-
-	def __formatPayload():
-		# |-Payload-|-16 bit-|
-		# |-Payload-|-CRC----|
-		# CRC: CCITT-X.25 X^6 + X^12 + X^5 + 1
-		pass
-
-	def __send( self, Motor, CmdId, Payload ):
-		BinedId = ( Motor << 13 ) | CmdId
-		PackedData = struct.pack( 'H', BinedId, Payload )
-		pass
-
-	def __read( self ):
-		pass
+		dscrpt.decode( self.recvLen, self.recvBuf )
+		return dscrpt

@@ -3,6 +3,8 @@ import bitstruct
 from AspepCrc import AspepCrc4, AspepCrc16
 
 ################################
+# Author: Boyce, RobiChip
+# Date: 2026/08/12
 # Description:
 # Data are sent in little-endian order: least significant bits of bytes are transmitted first.
 # 
@@ -28,39 +30,16 @@ class EAspepPktType( Enum ):
 	Async = 9		# "Asynchronous" channel. Only sent by Performer
 	pass
 
-class PktDscrpt():
+class CPktDscrpt():
 	def __init__( self ):
 		# create an empty packet
 		self.empty()
 		pass
 
-	def __init__( self, bufLen, buf ):
-		# create a packet based on input buffer
+	def __init__( self, type, *args ):
+		# create a packet based on assigned type
 		self.__init__()
-		type = bitstruct.unpack( 'u4', buf, allow_truncated = True )
-		
-		if bufLen <= 0:
-			raise ValueError( "the buffer length is <= 0" )
-
-		match type:
-			case EAspepPktType.Beacon:
-				self.__decodeBeacon( buf )
-				pass
-
-			case EAspepPktType.Ping:
-				self.__decodePing( buf )
-				pass
-
-			case EAspepPktType.Error:
-				self.__decodeError( buf )
-				pass
-
-			case EAspepPktType.Response:
-				self.__decodeResp( buf )
-				pass
-
-			case _:
-				pass
+		self.set( type, args )		
 		pass
 
 	def __eq__( self, target ) -> bool:
@@ -85,7 +64,7 @@ class PktDscrpt():
 		
 		return False
 	
-	def empty( self ):
+	def empty( self ) -> None:
 		self.type = EAspepPktType.Undefine
 		
 		# fields used by BEACON
@@ -114,6 +93,73 @@ class PktDscrpt():
 		self.crcH = 0	# 4 bits crc for header
 		pass
 
+	def set( self, type, *args ) -> None:
+		self.type = type
+		match type:
+			case EAspepPktType.Beacon:
+				self.ver = args[ 0 ]
+				self.enCrc = args[ 1 ]
+				self.rxsMax = args[ 2 ]
+				self.txsMax = args[ 3 ]
+				self.txaMax = args[ 4 ]
+				pass
+			
+			case EAspepPktType.Ping:
+				self.c = args[ 0 ]
+				self.n = args[ 1 ]
+				self.LLID = args[ 2 ]
+				self.pktNum = args[ 3 ]
+				pass
+
+			case EAspepPktType.Request:
+				self.payloadLen = args[ 0 ]
+				self.payload = args[ 1 ]
+				pass
+		pass
+
+	def encode( self ) -> tuple[ bytes, bytes ]:
+		match self.type:
+			case EAspepPktType.Beacon:
+				packedByte = self.encodeBeacon( self.ver, self.enCrc, self.rxsMax, self.txsMax, self.txaMax )
+				return packedByte
+
+			case EAspepPktType.Ping:
+				packedByte = self.encodeBeacon( self.c, self.n, self.LLID, self.pktNum )
+				return packedByte
+
+			case EAspepPktType.Request:
+				fPacket, sPacket = self.encodeRequest( self.payloadLen, self.payload )
+				return fPacket, sPacket
+
+	def decode( self, bufLen, buf ) -> None:
+		# create a packet based on input buffer
+		self.__init__()
+		type = bitstruct.unpack( 'u4', buf, allow_truncated = True )
+			
+		if bufLen <= 0:
+			raise ValueError( "the buffer length is <= 0" )
+	
+		match type:
+			case EAspepPktType.Beacon:
+				self.__decodeBeacon( buf )
+				pass
+	
+			case EAspepPktType.Ping:
+				self.__decodePing( buf )
+				pass
+	
+			case EAspepPktType.Error:
+				self.__decodeError( buf )
+				pass
+	
+			case EAspepPktType.Response:
+				self.__decodeResp( buf )
+				pass
+	
+			case _:
+				pass
+		pass
+	
 	def encodeBeacon( self, ver, enCrc, rxsMax, txsMax, txaMax ) -> bytes:
 		# |-4 bits-|-3 bits--|-1 bits-|-6 bits--|-7 bits--|-7 bits--|-4 bits-|
 		# |-Type---|-version-|-CRC_EN-|-RXS Max-|-TXS Max-|-TXA Max-|-CRCH---|
@@ -204,28 +250,28 @@ class PktDscrpt():
 		sPacket = self.payload + self.crc
 		return fPacket, sPacket
 
-	def __decodeBeacon( self, packedByte ):
+	def __decodeBeacon( self, packedByte ) -> None:
 		# |-4 bits-|-3 bits--|-1 bits-|-6 bits--|-7 bits--|-7 bits--|-4 bits-|
 		# |-Type---|-version-|-CRC_EN-|-RXS Max-|-TXS Max-|-TXA Max-|-CRCH---|
 		# No payload
 		self.type, self.ver, self.enCrc, self.rxsMax, self.txsMax, self.txaMax,	self.crcH = bitstruct.unpack( 'u4u3u1u6u7u7u4', packedByte )
 		pass 
 
-	def __decodePing( self, packedByte ):
+	def __decodePing( self, packedByte ) -> None:
 		# |-4 bits-|-2 bits-|-2 bits-|-4 bits-|-16 bits------|-4 bits-|
 		# |-Type---|-C------|-N------|-LLID---|-Packet Numer-|-CRCH---|
 		# No payload
 		self.type, self.c, self.n, self.LLID, self.pktNum, self.crcH = bitstruct.unpack( 'u4u2u2u4u16u4', packedByte )
 		pass
 
-	def __decodeError( self, packedByte ):
+	def __decodeError( self, packedByte ) -> None:
 		# |-4 bits-|-4 bits-|-8 bits--|-8 bits--|-4 bits-|-4 bits-|
 		# |-Type---|-Resrv--|-ErrCode-|-ErrCode-|-Resrv--|-CRCH---|
 		# No payload
 		self.type, _, self.err, self.err2, _, self.crcH = bitstruct.unpack( 'u4u4u8u8u4u4', packedByte )
 		pass
 
-	def __decodeResp( self, packedByte ):
+	def __decodeResp( self, packedByte ) -> None:
 		# |-4 bits-|-13 bits-|-11 bits-|-4 bits-| Intra Pkt Pause |-N bytes-|-2 bytes-|
 		# |-Type---|-PL Len--|-Resrv---|-CRCH---|                 |-Payload-|-CRC-----|
 
