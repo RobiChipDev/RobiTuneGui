@@ -12,8 +12,9 @@ class EParseCmd( Enum ):
 	Undefined = 0
 	Lin = 1
 	Wait = 2
+	SetReg = 3
 
-class CalcParser:
+class CRobiParser:
 	"""
 	基於 PLY 封裝的四則運算與變數解析器 Class
 	"""
@@ -26,6 +27,7 @@ class CalcParser:
 		'LBRACE', 'RBRACE', 'LPAREN', 'RPAREN', 'COMMA', \
 		'LT', 'GT', 'EQ', 'NE', 'LE', 'GE', \
 		'LIN', 'WAIT', 'WAIT_MOTION', 'FOR', \
+		'SET_REG', \
 	)
 
 	# 運算子與符號的正規表達式
@@ -56,7 +58,8 @@ class CalcParser:
 		'LIN': 'LIN', \
 		'WAIT': 'WAIT', \
 		'WAIT_MOTION': 'WAIT_MOTION', \
-		'FOR': 'FOR' \
+		'FOR': 'FOR', \
+		'SET_REG': 'SET_REG', \
 		}
 
 	# 處理換行符號以追蹤行號
@@ -190,11 +193,6 @@ class CalcParser:
 			# ==================================
        		# Statement 處理區 (包含行號更新)
         	# ==================================
-			case 'WAIT_MOTION':
-				self.currLineNo = node[ 1 ]
-				yield EParseState.Wait
-				return None
-
 			case 'ASSIGN':
 				self.currLineNo = node[ 3 ]
 				val = yield from self.execute( node[ 2 ] )
@@ -216,9 +214,10 @@ class CalcParser:
 				self.queue.append( cmd )
 				return cmd
 
-			case 'EXPR':
-				self.currLineNo = node[ 2 ]
-				return ( yield from self.execute( node[ 1 ] ) )
+			case 'WAIT_MOTION':
+				self.currLineNo = node[ 1 ]
+				yield EParseState.Wait
+				return None
 
 			case 'FOR':
 				self.currLineNo = node[ 5 ]
@@ -227,6 +226,19 @@ class CalcParser:
 					yield from self.execute( node[ 4 ] ) # d: 遞迴內容 (大括號區塊)
 					yield from self.execute( node[ 3 ] ) # c: 遞增/遞減式
 				return None
+
+			case 'SET_REG':
+				self.currLineNo = node[ 4 ]
+				arg1 = yield from self.execute( node[ 1 ] )
+				arg2 = yield from self.execute( node[ 2 ] )
+				arg3 = yield from self.execute( node[ 3 ] )
+				cmd = [ EParseCmd.SetReg, arg1, arg2, arg3 ]
+				self.queue.append( cmd )
+				return cmd
+
+			case 'EXPR':
+				self.currLineNo = node[ 2 ]
+				return ( yield from self.execute( node[ 1 ] ) )
 
 			# ==================================
         	# Expression 處理區 (計算值)
@@ -308,14 +320,19 @@ class CalcParser:
 		p[ 0 ] = ( 'WAIT_MOTION', p.lineno( 1 ) )
 		pass
 
-	def p_statement_expr( self, p: yacc.YaccProduction ) -> None:
-		'''statement : expression'''
-		p[ 0 ] = ( 'EXPR', p[ 1 ], p.lineno( 1 ) )
-		pass
-
 	def p_statement_for( self, p: yacc.YaccProduction ) -> None:
 		'''statement : FOR LPAREN statement COMMA expression COMMA statement RPAREN LBRACE statements RBRACE'''
 		p[ 0 ] = ( 'FOR', p[ 3 ], p[ 5 ], p[ 7 ], p[ 10 ], p.lineno( 1 ) )
+		pass
+
+	def p_statement_set_reg( self, p: yacc.YaccProduction ) -> None:
+		'''statement : SET_REG LPAREN expression COMMA expression COMMA expression RPAREN'''
+		p[ 0 ] = ( 'SET_REG', p[ 3 ], p[ 5 ], p[ 7 ], p.lineno( 1 ) )
+		pass
+
+	def p_statement_expr( self, p: yacc.YaccProduction ) -> None:
+		'''statement : expression'''
+		p[ 0 ] = ( 'EXPR', p[ 1 ], p.lineno( 1 ) )
 		pass
 
 	# 語法：表達式
@@ -363,8 +380,9 @@ class CalcParser:
 # ==========================================
 # 測試與使用範例
 # ==========================================
+'''
 if __name__ == '__main__':
-	calc = CalcParser()
+	calc = CRobiParser()
     
 	script = """
 	X = 1
@@ -400,3 +418,4 @@ if __name__ == '__main__':
 	print( f"\n--- 最終解譯器狀態: { status } ---" )
 	print( f"最終變數 (names): { calc.names }" )
 	print( f"最終佇列 (queue): { calc.queue }" )
+'''

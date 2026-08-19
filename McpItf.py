@@ -117,11 +117,8 @@ class CMcpItf():
 		# Response payload: 4 bytes
 		# Status code: always CMD_OK
 		sendBytes = self.__packCommand( motorNo = self.motorNo, cmdId = 0x0000, payload = b"" )
-		recvBytes = self.__sendRecv( sendBytes )
-
-		self.mcpVer = recvBytes[ :4 ]
-		status = EMcpRespStatusCode( int.from_bytes( recvBytes[ 4: ] ) )
-		return status, self.mcpVer
+		statusCode, self.mcpVer = self.__sendRecv( sendBytes )
+		return statusCode, self.mcpVer
 
 	def Cmd_SetRegister( self, *args ):
 		# Cmd_SetRegister( id1, val1, id2, val2, ..., idN, valN  )
@@ -137,10 +134,10 @@ class CMcpItf():
 			packedByte += args[ i + 1 ]
 			pass
 		sendBytes = self.__packCommand( motorNo = self.motorNo, cmdId = 0x0001, payload = packedByte )
-		recvBytes = self.__sendRecv( sendBytes )
+		statusCode, respPayload = self.__sendRecv( sendBytes )
 		pass
 
-	def Cmd_GetRegister( self, *args ):
+	def Cmd_GetRegister( self, *args ) -> list:
 		# Cmd_GetRegister( id1, id2, ..., idN )
 		# GET_REGISTER
 		# Command payload: 
@@ -152,14 +149,26 @@ class CMcpItf():
 		# Status code: CMD_OK / error code
 		packedBytes = bytes()
 		for item in args:
-			packedByte += item
+			packedBytes += item
 			pass
-		sendBytes = self.__packCommand( motorNo = self.motorNo, cmdId = 0x0002, payload = packedByte )
-		recvBytes = self.__sendRecv( sendBytes )
+		sendBytes = self.__packCommand( motorNo = self.motorNo, cmdId = 0x0002, payload = packedBytes )
+		statusCode, respPayload = self.__sendRecv( sendBytes )
+		if statusCode != EMcpRespStatusCode.Ok:
+			return list()
+
+		rtnValList = list()
+		byteCount = 0
+		isValid = False
+		regVal = None
 		for i in range( 0, len( args ), 1 ):
-			id, regType, motorNum = unpackRegId( args[ i ] )
+			regNo, regType, motorNo = unpackRegId( args[ i ] )
+			isValid, byteCount, regVal = decodeRegVal( regType, regNo, respPayload, byteCount )
+			if isValid == False:
+				break
+			rtnValList.append( regVal )
 			pass
-		pass
+
+		return rtnValList
 
 	def Cmd_StartMotor( self ):
 		# START_MOTOR
@@ -167,7 +176,7 @@ class CMcpItf():
 		# Response payload: 0
 		# Status code: CMD_OK / CMD_NOK
 		packedBytes = self.__packCommand( motorNo = self.motorNo, cmdId = 0x0003, payload = b"" )
-		recvBytes = self.__sendRecv( packedBytes )
+		statusCode, _ = self.__sendRecv( packedBytes )
 		pass
 
 	def Cmd_StopMotor( self ):
@@ -176,7 +185,7 @@ class CMcpItf():
 		# Response payload: 0
 		# Status code: CMD_OK / CMD_NOK
 		packedBytes = self.__packCommand( motorNo = self.motorNo, cmdId = 0x0004, payload = b"" )
-		recvBytes = self.__sendRecv( packedBytes )
+		statusCode, _ = self.__sendRecv( packedBytes )
 		pass
 
 	def Cmd_StopRamp( self ):
@@ -185,7 +194,7 @@ class CMcpItf():
 		# Response payload: 0
 		# Status code: always CMD_OK
 		packedBytes = self.__packCommand( motorNo = self.motorNo, cmdId = 0x0005, payload = b"" )
-		recvBytes = self.__sendRecv( packedBytes )
+		statusCode, _ = self.__sendRecv( packedBytes )
 		pass
 
 	def Cmd_StartStop( self, Motor ):
@@ -194,7 +203,7 @@ class CMcpItf():
 		# Response payload: 0
 		# Status code: CMD_OK / CMD_NOK
 		packedBytes = self.__packCommand( motorNo = self.motorNo, cmdId = 0x0006, payload = b"" )
-		recvBytes = self.__sendRecv( packedBytes )
+		statusCode, _ = self.__sendRecv( packedBytes )
 		pass
 
 	def Cmd_FaultAck( self ):
@@ -203,7 +212,7 @@ class CMcpItf():
 		# Response payload: 0
 		# Status code: always CMD_OK
 		packedBytes = self.__packCommand( motorNo = self.motorNo, cmdId = 0x0007, payload = b"" )
-		recvBytes = self.__sendRecv( packedBytes )
+		statusCode, _ = self.__sendRecv( packedBytes )
 		pass
 
 # private function
@@ -233,16 +242,13 @@ class CMcpItf():
 		packedBytes = bytes( [ byte0, byte1 ] ) + payload
 		return packedBytes
 
-	def __unpackCommand( self, motorNo: int, cmdId: int, payload: bytes ) -> bytes:
-			""" unpack MCP response
-			
+	def __sendRecv( self, txPackedBytes: bytes ) -> tuple[ int, bytes ]:
+		""" MCP response
+					
 			format:
 				|-N bytes----------|-8 bits------|
 				|-Response Payload-|-Status Code-|
-			"""
-			return 0
-
-	def __sendRecv( self, txPackedBytes: bytes ) -> bytes:
+		"""
 		retryCount = 0
 		self.aspepItf.sendRequest( txPackedBytes )
 		while ( self.aspepItf.isResponseReady() == False ) and ( retryCount <= self.MAX_WAIT_RESP_RETRY ):
@@ -251,4 +257,11 @@ class CMcpItf():
 			pass
 
 		_, rxPackedBytes = self.aspepItf.readResponse()
-		return rxPackedBytes
+		if len( rxPackedBytes ) == 1:
+			# only contain 1 status code, no valid payload
+			return EMcpRespStatusCode( int.from_bytes( rxPackedBytes ) ), bytes()
+
+		# split status code from the packet
+		statusCode = EMcpRespStatusCode( int.from_bytes( rxPackedBytes[ -1: ] ) )
+		respPayload = rxPackedBytes[ :-1 ]
+		return statusCode, respPayload
