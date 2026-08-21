@@ -1,18 +1,27 @@
 import ply.lex as lex
 import ply.yacc as yacc
 from enum import Enum
+from McpRegInfo import *
 
 class EParseState( Enum ):
 	End = 0
-	Wait = 1
-	StepLim = 2
+	WaitMotion = 1
+	WaitReg = 2
+	StepLim = 3
 	pass
 
 class EParseCmd( Enum ):
 	Undefined = 0
-	Lin = 1
-	Wait = 2
-	SetReg = 3
+	Wait = 1
+	SetReg = 2
+	GetReg = 3
+	Start = 4
+	Stop = 5
+	StopRamp = 6
+	StopStart = 7
+	PosRamp = 8
+	SpdRamp = 9
+	TorqRamp = 10
 
 class CRobiParser:
 	"""
@@ -26,8 +35,11 @@ class CRobiParser:
 		'PLUS', 'MINUS', 'TIMES', 'DIVIDE', 'EQUALS', \
 		'LBRACE', 'RBRACE', 'LPAREN', 'RPAREN', 'COMMA', \
 		'LT', 'GT', 'EQ', 'NE', 'LE', 'GE', \
-		'LIN', 'WAIT', 'WAIT_MOTION', 'FOR', \
-		'SET_REG', \
+		'WAIT', 'WAIT_MOTION', 'FOR', \
+		'SET_REG_8BIT', 'SET_REG_16BIT', 'SET_REG_32BIT', \
+		'GET_REG', \
+		'START', 'STOP', 'STOP_RAMP', 'STOP_START', \
+		'POS_RAMP', 'SPD_RAMP', 'TORQ_RAMP'\
 	)
 
 	# 運算子與符號的正規表達式
@@ -48,18 +60,25 @@ class CRobiParser:
 	t_RPAREN  = r'\)'
 	t_COMMA   = r','
 
-	# 忽略空格、Tab 與換行。
-	# (我們不強制以 \n 作為嚴格的 Token，而是讓語法結構自然分離指令，
-	# 這樣使用者不管怎麼換行、排版，Parser 都能擁有極高的容錯性)
+	# 忽略空格、Tab。
 	t_ignore  = ' \t\r'
 
 	# 關鍵字對應
 	reserved = { \
-		'LIN': 'LIN', \
 		'WAIT': 'WAIT', \
 		'WAIT_MOTION': 'WAIT_MOTION', \
 		'FOR': 'FOR', \
-		'SET_REG': 'SET_REG', \
+		'SET_REG_8BIT': 'SET_REG_8BIT', \
+		'SET_REG_16BIT': 'SET_REG_16BIT', \
+		'SET_REG_32BIT': 'SET_REG_32BIT', \
+		'GET_REG': 'GET_REG', \
+		'START': 'START', \
+		'STOP': 'STOP', \
+		'STOP_RAMP': 'STOP_RAMP', \
+		'STOP_START': 'STOP_START', \
+		'POS_RAMP': 'POS_RAMP', \
+		'SPD_RAMP': 'SPD_RAMP', \
+		'TORQ_RAMP': 'TORQ_RAMP', \
 		}
 
 	# 處理換行符號以追蹤行號
@@ -75,9 +94,19 @@ class CRobiParser:
 		return t
 
 	def t_NUMBER( self, t: lex.LexToken ) -> lex.LexToken:
-		r'\d+(\.\d+)?'
-		# 自動判斷要轉換為 float 還是 int
-		t.value = float( t.value ) if '.' in t.value else int( t.value )
+		r'(0[xX][0-9a-fA-F]+)|(\d+(\.\d+)?([eE][+-]?\d+)?)'
+		# 支援 16進位 | (浮點數/整數 + 可選的科學記號後綴)
+
+		rawStr = t.value.lower()
+		# 1. 處理 Hex (十六進位)
+		if rawStr.startswith( '0x' ):
+			t.value = int( t.value, 16 )
+		# 2. 處理科學記號與浮點數
+		elif 'e' in rawStr or '.' in rawStr:
+			t.value = float( t.value )
+		# 3. 處理一般十進位整數
+		else:
+			t.value = int( t.value )
 		return t
 
 	def t_error( self, t: lex.LexToken ) -> None:
@@ -128,22 +157,17 @@ class CRobiParser:
 		self._exec = self.execute( ast )
 		return self.resume()
 
-	def resume( self ) -> EParseState:
+	def resume( self, setValue = None ) -> EParseState:
 		if not self._exec:
 			return EParseState.End
 
 		# 每次呼叫 resume 時，重置計步器
 		self.stepCount = 0
-		
 		try:
-			# 推進產生器
-			res = next( self._exec )
-			match res:
-				case EParseState.Wait:
-					return EParseState.Wait
-
-				case EParseState.StepLim:
-					return EParseState.StepLim
+			if setValue != None:
+				return self._exec.send( setValue )
+			else:
+				return next( self._exec )
 				
 		except StopIteration:
 			# 解譯自然結束
@@ -199,14 +223,6 @@ class CRobiParser:
 				self.names[ node[ 1 ] ] = val
 				return val
 
-			case 'LIN':
-				self.currLineNo = node[ 3 ]
-				arg1 = yield from self.execute( node[ 1 ] )
-				arg2 = yield from self.execute( node[ 2 ] )
-				cmd = [ EParseCmd.Lin, arg1, arg2 ]
-				self.queue.append( cmd )
-				return cmd
-
 			case 'WAIT':
 				self.currLineNo = node[ 2 ]
 				arg = yield from self.execute( node[ 1 ] )
@@ -216,7 +232,7 @@ class CRobiParser:
 
 			case 'WAIT_MOTION':
 				self.currLineNo = node[ 1 ]
-				yield EParseState.Wait
+				yield EParseState.WaitMotion
 				return None
 
 			case 'FOR':
@@ -227,12 +243,75 @@ class CRobiParser:
 					yield from self.execute( node[ 3 ] ) # c: 遞增/遞減式
 				return None
 
-			case 'SET_REG':
-				self.currLineNo = node[ 4 ]
-				arg1 = yield from self.execute( node[ 1 ] )
-				arg2 = yield from self.execute( node[ 2 ] )
-				arg3 = yield from self.execute( node[ 3 ] )
-				cmd = [ EParseCmd.SetReg, arg1, arg2, arg3 ]
+			case 'SET_REG_8BIT':
+				self.currLineNo = node[ 3 ]
+				arg1 = yield from self.execute( node[ 1 ] )	# regNo
+				arg2 = yield from self.execute( node[ 2 ] )	# regVal
+				cmd = [ EParseCmd.SetReg, arg1, EMcpRegType.Bit8, arg2 ]
+				self.queue.append( cmd )
+				return cmd
+
+			case 'SET_REG_16BIT':
+				self.currLineNo = node[ 3 ]
+				arg1 = yield from self.execute( node[ 1 ] )	# regNo
+				arg2 = yield from self.execute( node[ 2 ] )	# regVal
+				cmd = [ EParseCmd.SetReg, arg1, EMcpRegType.Bit16, arg2 ]
+				self.queue.append( cmd )
+				return cmd
+
+			case 'SET_REG_32BIT':
+				self.currLineNo = node[ 3 ]
+				arg1 = yield from self.execute( node[ 1 ] )	# regNo
+				arg2 = yield from self.execute( node[ 2 ] )	# regVal
+				cmd = [ EParseCmd.SetReg, arg1, EMcpRegType.Bit32, arg2 ]
+				self.queue.append( cmd )
+				return cmd
+
+			case 'START':
+				self.currLineNo = node[ 1 ]
+				cmd = [ EParseCmd.Start ]
+				self.queue.append( cmd )
+				return cmd
+
+			case 'STOP':
+				self.currLineNo = node[ 1 ]
+				cmd = [ EParseCmd.Stop ]
+				self.queue.append( cmd )
+				return cmd
+
+			case 'STOP_RAMP':
+				self.currLineNo = node[ 1 ]
+				cmd = [ EParseCmd.StopRamp ]
+				self.queue.append( cmd )
+				return cmd
+
+			case 'STOP_START':
+				self.currLineNo = node[ 1 ]
+				cmd = [ EParseCmd.StopStart ]
+				self.queue.append( cmd )
+				return cmd
+
+			case 'POS_RAMP':
+				self.currLineNo = node[ 3 ]
+				arg1 = yield from self.execute( node[ 1 ] ) # target position
+				arg2 = yield from self.execute( node[ 2 ] ) # duration
+				cmd = [ EParseCmd.PosRamp, arg1, arg2 ]
+				self.queue.append( cmd )
+				return cmd
+
+			case 'SPD_RAMP':
+				self.currLineNo = node[ 3 ]
+				arg1 = yield from self.execute( node[ 1 ] )	# target speed
+				arg2 = yield from self.execute( node[ 2 ] )	# duration
+				cmd = [ EParseCmd.SpdRamp, arg1, arg2 ]
+				self.queue.append( cmd )
+				return cmd
+
+			case 'TORQ_RAMP':
+				self.currLineNo = node[ 3 ]
+				arg1 = yield from self.execute( node[ 1 ] )	# target torque
+				arg2 = yield from self.execute( node[ 2 ] ) # duration
+				cmd = [ EParseCmd.TorqRamp, arg1, arg2 ]
 				self.queue.append( cmd )
 				return cmd
 
@@ -281,6 +360,16 @@ class CRobiParser:
 					case '!=':
 						return 1 if ( left != right ) else 0
 				pass
+
+			case 'GET_REG':
+				self.currLineNo = node[ 3 ]
+				arg1 = yield from self.execute( node[ 1 ] ) # regNo
+				arg2 = yield from self.execute( node[ 2 ] )	# regType
+
+				# pause execution, wait value injection
+				value = yield EParseState.WaitReg
+				self.queue.append( cmd )
+				return cmd
 		pass
 
 	# 語法：多行指令組合 (程式進入點)
@@ -305,11 +394,6 @@ class CRobiParser:
 		p[ 0 ] = ( 'ASSIGN', p[ 1 ], p[ 3 ], p.lineno( 1 ) )
 		pass
 
-	def p_statement_lin( self, p: yacc.YaccProduction ) -> None:
-		'''statement : LIN LPAREN expression COMMA expression RPAREN'''
-		p[ 0 ] = ( 'LIN', p[ 3 ], p[ 5 ], p.lineno( 1 ) )
-		pass
-
 	def p_statement_wait( self, p: yacc.YaccProduction ) -> None:
 		'''statement : WAIT LPAREN expression RPAREN'''
 		p[ 0 ] = ( 'WAIT', p[ 3 ], p.lineno( 1 ) )
@@ -325,9 +409,54 @@ class CRobiParser:
 		p[ 0 ] = ( 'FOR', p[ 3 ], p[ 5 ], p[ 7 ], p[ 10 ], p.lineno( 1 ) )
 		pass
 
-	def p_statement_set_reg( self, p: yacc.YaccProduction ) -> None:
-		'''statement : SET_REG LPAREN expression COMMA expression COMMA expression RPAREN'''
-		p[ 0 ] = ( 'SET_REG', p[ 3 ], p[ 5 ], p[ 7 ], p.lineno( 1 ) )
+	def p_statement_set_reg_8bit( self, p: yacc.YaccProduction ) -> None:
+		'''statement : SET_REG_8BIT LPAREN expression COMMA expression RPAREN'''
+		p[ 0 ] = ( 'SET_REG_8BIT', p[ 3 ], p[ 5 ], p.lineno( 1 ) )
+		pass
+
+	def p_statement_set_reg_16bit( self, p: yacc.YaccProduction ) -> None:
+		'''statement : SET_REG_16BIT LPAREN expression COMMA expression RPAREN'''
+		p[ 0 ] = ( 'SET_REG_16BIT', p[ 3 ], p[ 5 ], p.lineno( 1 ) )
+		pass
+
+	def p_statement_set_reg_32bit( self, p: yacc.YaccProduction ) -> None:
+		'''statement : SET_REG_32BIT LPAREN expression COMMA expression RPAREN'''
+		p[ 0 ] = ( 'SET_REG_32BIT', p[ 3 ], p[ 5 ], p.lineno( 1 ) )
+		pass
+
+	def p_statement_start( self, p: yacc.YaccProduction ) -> None:
+		'''statement : START LPAREN RPAREN'''
+		p[ 0 ] = ( 'START', p.lineno( 1 ) )
+		pass
+
+	def p_statement_stop( self, p: yacc.YaccProduction ) -> None:
+		'''statement : STOP LPAREN RPAREN'''
+		p[ 0 ] = ( 'STOP', p.lineno( 1 ) )
+		pass
+
+	def p_statement_stop_ramp( self, p: yacc.YaccProduction ) -> None:
+		'''statement : STOP_RAMP LPAREN RPAREN'''
+		p[ 0 ] = ( 'STOP_RAMP', p.lineno( 1 ) )
+		pass
+
+	def p_statement_stop_start( self, p: yacc.YaccProduction ) -> None:
+		'''statement : STOP_START LPAREN RPAREN'''
+		p[ 0 ] = ( 'STOP_START', p.lineno( 1 ) )
+		pass
+
+	def p_statement_pos_ramp( self, p: yacc.YaccProduction ) -> None:
+		'''statement : POS_RAMP LPAREN expression COMMA expression RPAREN'''
+		p[ 0 ] = ( 'POS_RAMP', p[ 3 ], p[ 5 ], p.lineno( 1 ) )
+		pass
+
+	def p_statement_spd_ramp( self, p: yacc.YaccProduction ) -> None:
+		'''statement : SPD_RAMP LPAREN expression COMMA expression RPAREN'''
+		p[ 0 ] = ( 'SPD_RAMP', p[ 3 ], p[ 5 ], p.lineno( 1 ) )
+		pass
+
+	def p_statement_torq_ramp( self, p: yacc.YaccProduction ) -> None:
+		'''statement : TORQ_RAMP LPAREN expression COMMA expression RPAREN'''
+		p[ 0 ] = ( 'TORQ_RAMP', p[ 3 ], p[ 5 ], p.lineno( 1 ) )
 		pass
 
 	def p_statement_expr( self, p: yacc.YaccProduction ) -> None:
@@ -370,6 +499,11 @@ class CRobiParser:
 		p[ 0 ] = ( 'VAR', p[ 1 ] )
 		pass
 
+	def p_expression_get_reg( self, p: yacc.YaccProduction ) -> None:
+		'''expression : GET_REG LPAREN expression COMMA expression RPAREN'''
+		p[ 0 ] = ( 'GET_REGISTER', p[ 3 ], p[ 5 ], p.lineno( 1 ) )
+		pass
+
 	def p_error( self, p: yacc.YaccProduction ) -> None:
 		if p:
 			print( f"Parser 錯誤: 語法錯誤發生於 '{ p.value }'" )
@@ -387,10 +521,10 @@ if __name__ == '__main__':
 	script = """
 	X = 1
 	WAIT_MOTION()
-	LIN(X, 100)
+	POS_RAMP(X, 100)
     
 	FOR(I=0, I<2, I=I+1) {
-		LIN(I, I*2)
+		POS_RAMP(I, I*2)
 		WAIT_MOTION()
 	}
     
@@ -401,7 +535,7 @@ if __name__ == '__main__':
 	status = calc.parse_and_start( script )
     
 	# 模擬 Caller 的事件迴圈 (Event Loop)
-	while status == EParseState.Wait:
+	while status == EParseState.WaitMotion:
 		print( f"\n[系統狀態] Parser 暫停中... 目前行號: { calc.getCurrLinNo() }" )
 		print( f"目前變數: { calc.names }" )
 		print( f"目前佇列: { calc.queue }" )

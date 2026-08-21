@@ -78,7 +78,8 @@ class CMcpItf():
 		pass
 
 	def __del__( self ):
-		self.workTick.join()
+		if self.workTick != None:
+			self.workTick.join()
 		pass
 
 # configuration and state query services
