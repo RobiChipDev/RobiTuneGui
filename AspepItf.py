@@ -3,7 +3,6 @@ import copy
 import serial
 from AspepCodec import EAspepPktType, CPktDscrpt
 from enum import Enum
-import struct
 
 ################################
 # Author: Boyce, RobiChip
@@ -68,8 +67,18 @@ class EAspepSyncState( Enum ):
 	pass
 
 class EAspepReq( Enum ):
-	Non = 0			# request is empty
-	Connect = 1		# state transition: Idle -> Conf
+	Non = 0		# request is empty
+	Connect = 1	# state transition: Idle -> Conf
+	pass
+
+class CRRSync():
+	'''REQUEST/RESPONSE synchronous container'''
+	def __init__( self ):
+		self.syncState = EAspepSyncState.Idle
+		self.ticket = 0
+		self.request = CPktDscrpt( EAspepPktType.Request )
+		self.response = CPktDscrpt( EAspepPktType.Response )
+		pass
 	pass
 
 # main interface
@@ -103,14 +112,13 @@ class CAspepItf():
 		# init state machine variables
 		self.role = EAspepRole.Ctrl
 		self.state = EAspepState.Idle
-		self.syncState = EAspepSyncState.Idle
 		self.req = EAspepReq.Non
 
 		# init empty BEACON/PING/REQUEST packet
 		self.beacon = CPktDscrpt( EAspepPktType.Beacon, 0, 0, 0, 0, 0 )
 		self.ping = CPktDscrpt( EAspepPktType.Ping, 0, 0, 0, 0 )
-		self.request = CPktDscrpt( EAspepPktType.Request )
-		self.response = CPktDscrpt( EAspepPktType.Response )
+		self.listRRSync = list()
+		self.countRRSync = 0
 
 		# init timing related variables
 		self.currTick = time.perf_counter() # float in second
@@ -128,10 +136,10 @@ class CAspepItf():
 	def connect( self, enableCrc: bool, rxsMax, txsMax, txaMax, timBeacon: float = 1.0, timPing: float = 1.0 ) -> bool:
 		"""Establish connection
 		Args:
-			timBeacon: unit( second )
-			timPing: unit( second )
+			timBeacon(float): unit[ sec ]
+			timPing(float): unit[ sec ]
 		Returns:
-			Is the connection process initiated successfully?
+			success(bool): Is the connection process initiated successfully?
 		"""
 		if self.comm.is_open == False:
 			return False
@@ -145,28 +153,44 @@ class CAspepItf():
 	def getState( self ) -> EAspepState:
 		return self.state
 
-	def sendRequest( self, payload: bytes ) -> bool:
+	def sendRequest( self, payload: bytes ) -> tuple[ bool, int ]:
+		'''send a REQUEST packet and obtain a ticket for later retrieval of the RESPONSE
+		Args:
+			payload(bytes): REQUEST payload part
+		Returns:
+			success(bool): True if the REQUEST is pushed into queue
+			ticket(int): a ticket for later retrieval of the RESPONSE
+		'''
 		if self.state != EAspepState.Connected:
-			return False
+			return False, -1
 
-		# Force the sync status to revert to the “Request”, 
-		# and discard response that have not yet been retrieved.
-		self.request.set( EAspepPktType.Request, len( payload ), payload )
-		self.syncState = EAspepSyncState.RequestInBuf
-		return True
+		packet = CRRSync()
+		packet.request.set( EAspepPktType.Request, len( payload ), payload )
+		packet.syncState = EAspepSyncState.RequestInBuf
 
-	def readResponse( self ) -> tuple[ bool, bytes ]:
-		if self.isResponseReady() == False:
+		self.countRRSync += 1
+		packet.ticket = self.countRRSync
+		self.listRRSync.append( packet )
+		return True, packet.ticket
+
+	def readResponse( self, ticket: int ) -> tuple[ bool, bytes ]:
+		if self.isResponseReady( ticket ) == False:
 			return False, bytes()
 
-		self.syncState = EAspepSyncState.Idle
-		return True, self.response.payload
+		for i in range( len( self.listRRSync ) ):
+			if self.listRRSync[ i ].ticket == ticket:
+				packet = self.listRRSync.pop( i )
+				break
+		return True, packet.response.payload
 
-	def isResponseReady( self ) -> bool:
+	def isResponseReady( self, ticket: int ) -> bool:
 		if self.state != EAspepState.Connected:
 			return False
 
-		return self.syncState == EAspepSyncState.ResponseInBuf
+		for item in self.listRRSync:
+			if ( item.ticket == ticket ) and ( item.syncState == EAspepSyncState.ResponseInBuf ):
+				return True
+		return False
 		
 	def runStateMachine( self ):
 		# update the time tick
@@ -260,31 +284,35 @@ class CAspepItf():
 				pass
 
 			case EAspepState.Connected:
-				if self.syncState == EAspepSyncState.RequestInBuf:
-					fPacket, _ = self.request.encode( self.beacon.enCrc )
-					self.comm.write( fPacket )
-					self.syncState = EAspepSyncState.IntraPause
-					return
+				for item in self.listRRSync:
+					if item.syncState == EAspepSyncState.ResponseInBuf:
+						continue
 
-				if self.syncState == EAspepSyncState.IntraPause:
-					_, sPacket = self.request.encode( self.beacon.enCrc )
-					self.comm.write( sPacket )
-					self.syncState = EAspepSyncState.WaitResponse
-					return
-
-				if self.syncState == EAspepSyncState.WaitResponse:
-					if ( recvPkt.type == EAspepPktType.Undefine ) and ( self.subTimer > self.SYNC_WAIT_TIMEOUT ):
-						self.subTimer = 0
-						self.syncState = EAspepSyncState.Idle
+					if item.syncState == EAspepSyncState.RequestInBuf:
+						fPacket, _ = item.request.encode( self.beacon.enCrc )
+						self.comm.write( fPacket )
+						item.syncState = EAspepSyncState.IntraPause
 						return
 
-					if recvPkt.type != EAspepPktType.Response:
+					if item.syncState == EAspepSyncState.IntraPause:
+						_, sPacket = item.request.encode( self.beacon.enCrc )
+						self.comm.write( sPacket )
+						item.syncState = EAspepSyncState.WaitResponse
 						return
 
-					self.response = copy.copy( recvPkt )
-					self.syncState = EAspepSyncState.ResponseInBuf
-					return
-				pass
+					if item.syncState == EAspepSyncState.WaitResponse:
+						if ( recvPkt.type == EAspepPktType.Undefine ) and ( self.subTimer > self.SYNC_WAIT_TIMEOUT ):
+							self.subTimer = 0
+							item.syncState = EAspepSyncState.Idle
+							return
+
+						if recvPkt.type != EAspepPktType.Response:
+							return
+
+						item.response = copy.copy( recvPkt )
+						item.syncState = EAspepSyncState.ResponseInBuf
+						return
+					pass
 
 			case _:
 				# state out of range handling

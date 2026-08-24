@@ -162,9 +162,6 @@ class CRobiPlanner():
 
 	def __handleEntry( self, planState: EPlanState, opCode: COpCode ):
 		match opCode.codeNo:
-			case EParseCmd.Lin:
-				pass
-
 			case EParseCmd.Wait:
 				opCode.timer = 0
 				opCode.State = ECodeExecState.InExec
@@ -203,7 +200,8 @@ class CRobiPlanner():
 
 			case EParseCmd.SpdRamp:
 				# SPD_RAMP( TARGET_SPD, DURATION )
-				self.mcp.workTick
+				self.mcp.Cmd_SetSpdRamp( opCode.args[ 0 ], opCode.args[ 1 ] )
+				opCode.State = ECodeExecState.InExec
 				pass
 
 			case _:
@@ -213,11 +211,19 @@ class CRobiPlanner():
 
 	def __handleExec( self, planState: EPlanState, opCode: COpCode ):
 		match opCode.codeNo:
-			case EParseCmd.Lin:
+			case EParseCmd.Wait:
+				if opCode.timer >= opCode.args[ 0 ]:
+					opCode.execState = ECodeExecState.Done
+					return
+				opCode.timer += self.planItvl
 				pass
 
-			case EParseCmd.Wait:
-				if	opCode.timer >= opCode.args[ 0 ]:
+			case EParseCmd.SpdRamp:
+				if self.mcp.fbkSpd >= opCode.args[ 0 ]:
+					opCode.execState = ECodeExecState.Done
+					return
+
+				if ( opCode.timer * 1000.0 ) >= opCode.args[ 1 ]:
 					opCode.execState = ECodeExecState.Done
 					return
 				opCode.timer += self.planItvl

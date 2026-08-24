@@ -131,13 +131,6 @@ class CRobiGui():
 		self.btnSetReg.setText( "SetReg" )
 		self.btnSetReg.setGeometry( 0, 80, 100, 30 )
 		self.btnSetReg.clicked.connect( self.__btnSetRegClick )
-
-		# prepare register identifiers for update routine
-		self.regUpdRoutine = ( \
-			packRegId( 22,	EMcpRegType.Bit16, 1 ), # VBUS \
-			packRegId( 23,	EMcpRegType.Bit16, 1 ), # TEMP \
-			packRegId( 109,	EMcpRegType.Bit32, 1 ), # POWER \
-			) 
 		pass
 
 	def __initFileOp( self ) -> None:
@@ -166,6 +159,7 @@ class CRobiGui():
 # interaction events
 	def __btnRefreshClick( self ) -> None:
 		ports = serial.tools.list_ports.comports()
+		self.ComBoxPortName.clear()
 		for port in ports:
 			self.ComBoxPortName.addItem( port.device )
 			pass
@@ -285,9 +279,8 @@ class CRobiGui():
 
 		if self.state == EGuiState.Connected:
 			# perform fields update routine
-			rtnValList = self.mcp.Cmd_GetRegister( *self.regUpdRoutine )
-			self.tBoxVBus.setText( str( rtnValList[ 0 ] ) )
-			self.tBoxTemp.setText( str( rtnValList[ 1 ] ) )
+			self.tBoxVBus.setText( str( self.mcp.regVBus ) )
+			self.tBoxTemp.setText( str( self.mcp.regTemp ) )
 			pass
 
 		pass

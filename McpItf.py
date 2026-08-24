@@ -60,7 +60,8 @@ class EMcpState( Enum ):
 
 class CMcpItf():
 # constants and definitions
-	TICK_INTERVAL = 0.1	# second
+	ASPEP_TICK_INTERVAL = 0.1			# second
+	LOW_FREQ_INFO_TICK_INTERVAL = 0.5	# second
 	MAX_RXS = 0x3F
 	MAX_TXS = 0x7F
 	MAX_TXA = 0x7F
@@ -72,14 +73,35 @@ class CMcpItf():
 
 		# initialize MCP information container
 		self.mcpVer = bytes()
+		self.fbkSpd = 0 # RPM
+		self.fbkPos = 0
+		self.fbkTorq = 0
+		self.regVBus = 0
+		self.regTemp = 0
+		self.regPower = 0
 
-		# initialize a timer to run the ASPEP machine periodically
-		self.workTick = None
+		# initialize threads that run periodically
+		self.aspepTick = None
+		self.medFreqInfoTick = None
+
+		# prepare register identifiers for update routine
+		self.regUpdRoutine = ( \
+			packRegId( 1,	EMcpRegType.Bit32, 1 ), # SPEED_MEAS \
+			packRegId( 22,	EMcpRegType.Bit16, 1 ), # VBUS \
+			packRegId( 23,	EMcpRegType.Bit16, 1 ), # TEMP \
+			packRegId( 109,	EMcpRegType.Bit32, 1 ), # POWER \
+		) 
 		pass
 
 	def __del__( self ):
-		if self.workTick != None:
-			self.workTick.join()
+		if self.aspepTick != None:
+			self.aspepTick.join()
+			pass
+
+		if self.medFreqInfoTick != None:
+			self.medFreqInfoTick.join()
+			pass
+
 		pass
 
 # configuration and state query services
@@ -89,8 +111,12 @@ class CMcpItf():
 		self.aspepItf.connect( True, self.MAX_RXS, self.MAX_TXS, self.MAX_TXA )
 		
 		# initialize a timer to run the ASPEP machine periodically
-		self.workTick = threading.Thread( target = self.__tick, daemon = True )
-		self.workTick.start()
+		self.aspepTick = threading.Thread( target = self.__aspepTick, daemon = True )
+		self.aspepTick.start()
+
+		# initialize a timer to query MCP information periodically
+		self.medFreqInfoTick = threading.Thread( target = self.__medFreqInfoTick, daemon = True )
+		self.medFreqInfoTick.start()
 		pass
 
 	def disconnect( self ) -> None:
@@ -111,7 +137,7 @@ class CMcpItf():
 				return EMcpState.Connected
 		return EMcpState.Idle
 
-# all the following Cmd functions are blocking
+# private functions: all the following Cmd functions are blocking
 	def Cmd_GetMcpVer( self ) -> tuple[ EMcpRespStatusCode, bytes ]:
 		# GET_MCP_VERSION
 		# Command payload: 0
@@ -216,15 +242,48 @@ class CMcpItf():
 		statusCode, _ = self.__sendRecv( packedBytes )
 		pass
 
-# private function
-	def __tick( self ) -> None:
+	def Cmd_SetSpdRamp( self, targetSpd: int, duration: int ):
+		'''Set the speed ramp-up curve. If the motor is already running, it will begin accelerating immediately.
+		Args:
+			targetSpd (int): The total path length traveled.
+			duration (int): The duration of movement.
+		Returns:
+			StatusCode
+		'''
+		packedBytes = packRegId( EMcpRawStructReg.SpdRamp.value, EMcpRegType.RawStruct, self.motorNo )
+		packedBytes += struct.pack( McpRawStructFmt.get( EMcpRawStructReg.SpdRamp ), targetSpd, duration )
+		sendBytes = self.__packCommand( motorNo = self.motorNo, cmdId = 0x0001, payload = packedBytes )
+		statusCode, respPayload = self.__sendRecv( sendBytes )
+		pass
+
+# private function:
+	def __aspepTick( self ) -> None:
 		nextRun = time.perf_counter()
 
 		while True:
-			nextRun += self.TICK_INTERVAL
+			nextRun += self.ASPEP_TICK_INTERVAL
 			sleepTime = nextRun - time.perf_counter()
 
 			self.aspepItf.runStateMachine()
+			if sleepTime > 0:
+				time.sleep( sleepTime )
+			pass
+		pass
+
+	def __medFreqInfoTick( self ) -> None:
+		nextRun = time.perf_counter()
+
+		while True:
+			nextRun += self.LOW_FREQ_INFO_TICK_INTERVAL
+			sleepTime = nextRun - time.perf_counter()
+
+			if self.aspepItf.getState() == EAspepState.Connected:
+				rtnValList = self.Cmd_GetRegister( *self.regUpdRoutine )
+				self.fbkSpd = rtnValList[ 0 ]
+				self.regVBus = rtnValList[ 1 ]
+				self.regTemp = rtnValList[ 2 ]
+				self.regPower = rtnValList[ 3 ]
+				pass
 			if sleepTime > 0:
 				time.sleep( sleepTime )
 			pass
@@ -244,20 +303,19 @@ class CMcpItf():
 		return packedBytes
 
 	def __sendRecv( self, txPackedBytes: bytes ) -> tuple[ int, bytes ]:
-		""" MCP response
-					
-			format:
-				|-N bytes----------|-8 bits------|
-				|-Response Payload-|-Status Code-|
-		"""
+		# format:
+		# |-N bytes----------|-8 bits------|
+		# |-Response Payload-|-Status Code-|
 		retryCount = 0
-		self.aspepItf.sendRequest( txPackedBytes )
-		while ( self.aspepItf.isResponseReady() == False ) and ( retryCount <= self.MAX_WAIT_RESP_RETRY ):
+		_, ticket = self.aspepItf.sendRequest( txPackedBytes )
+		while self.aspepItf.isResponseReady( ticket ) == False:
+			if retryCount > self.MAX_WAIT_RESP_RETRY:
+				return EMcpRespStatusCode.Nok, bytes()
 			retryCount += 1
 			time.sleep( 0.1 )
 			pass
 
-		_, rxPackedBytes = self.aspepItf.readResponse()
+		_, rxPackedBytes = self.aspepItf.readResponse( ticket )
 		if len( rxPackedBytes ) == 1:
 			# only contain 1 status code, no valid payload
 			return EMcpRespStatusCode( int.from_bytes( rxPackedBytes ) ), bytes()
