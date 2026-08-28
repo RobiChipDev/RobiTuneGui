@@ -25,8 +25,9 @@ class ECodeExecState( Enum ):
 	pass
 
 class COpCode():
-	def __init__( self, opCode: EParseCmd = EParseCmd.Undefined, *args ):
+	def __init__( self, opCode: EParseCmd = EParseCmd.Undefined, lineNo: int = -1, *args ):
 		self.codeNo = opCode
+		self.lineNo = lineNo
 		self.args = list( args )
 		self.state = ECodeExecState.WaitExec
 
@@ -39,12 +40,15 @@ class CRobiPlanner():
 	# consts and definitions
 	MAX_PLAN_STEP = 10
 
-	def __init__( self, mcp: CMcpItf, plannerItvl: int = 0.5 ):
-		'''plannerItvl: unit[ msec ]'''
+	def __init__( self, mcp: CMcpItf, plannerItvl: int = 500 ):
+		'''
+		Args:
+			plannerItvl: unit[ msec ]
+		'''
 		self.parser = CRobiParser()
 		self.script = None
 		self.currLineNo = 0
-		self.currOpCode = None
+		self.opCode = None
 		self.cmdQueue = Queue() # thread-safe opcode storage
 		self.mcp = mcp # associate motor control interface
 
@@ -78,14 +82,28 @@ class CRobiPlanner():
 			pass
 		pass
 
+	def stop( self ) -> None:
+		pass
+
+	def getState( self ) -> EPlanState:
+		return self.planState
+
+# private functions
 	def __pushCmd( self, rawOpCode: list ) -> None:
-		if len( rawOpCode ) == 1:
+		'''
+		Args:
+			rawOpCode(list): |-EParseCmd-|-lineNo-|-(arg list)*-|
+		'''
+		if len( rawOpCode ) < 2:
+			raise ValueError( "OpCode args 數量錯誤" )
+
+		if len( rawOpCode ) == 2:
 			# w/o args
-			opCode = COpCode( rawOpCode[ 0 ] )
+			opCode = COpCode( rawOpCode[ 0 ], rawOpCode[ 1 ] )
 			pass
 		else:
 			# w/ args
-			opCode = COpCode( rawOpCode[ 0 ], rawOpCode[ 1: ] )
+			opCode = COpCode( rawOpCode[ 0 ], rawOpCode[ 1 ], *rawOpCode[ 2: ] )
 			pass
 		
 		self.cmdQueue.put( opCode )	
@@ -103,14 +121,14 @@ class CRobiPlanner():
 			if sleepTime > 0:
 				time.sleep( sleepTime )
 				pass
-		pass
+		pass		
 
-	def __runPlanSteps( self ):
-		if ( self.cmdQueue.empty() == True ) and self.planState == EPlanState.Idle:
-			return
+	def __runPlanSteps( self ) -> None:
+		if ( self.cmdQueue.empty() == True ) and ( self.planState == EPlanState.Idle ):
+			return None
 
 		# get next operation code
-		if( self.opCode == None ):
+		if self.opCode == None:
 			self.opCode = self.cmdQueue.get()
 			self.planState = EPlanState.ExecForward
 			pass
@@ -120,13 +138,13 @@ class CRobiPlanner():
 			flowCtrl = self.__execOpCode( self.planState, self.opCode )
 			match flowCtrl:
 				case EPlanFlowCtrl.Wait:
-					yield
+					return None
 
 				case EPlanFlowCtrl.Next:
 					if self.cmdQueue.empty() == True:
 						self.opCode = None
 						self.planState = EPlanState.Idle
-						return
+						return None
 					self.opCode = self.cmdQueue.get()
 					pass
 
@@ -136,7 +154,7 @@ class CRobiPlanner():
 					pass
 
 			if self.planStepCnt > self.MAX_PLAN_STEP:
-				yield
+				return None
 			self.planStepCnt += 1
 			pass	
 		pass
@@ -146,91 +164,88 @@ class CRobiPlanner():
 			# exception, the planner might be forcely paused
 			return EPlanFlowCtrl.Wait
 		
-		match opCode.execState:
+		match opCode.state:
 			case ECodeExecState.WaitExec:
 				self.__handleEntry( planState, opCode )
 				pass
 
 			case ECodeExecState.InExec:
 				self.__handleExec( planState, opCode )
-				if opCode.state == ECodeExecState.Done:
-					return EPlanFlowCtrl.Next
 				pass
 
-		# keep current operation code	
-		return EPlanFlowCtrl.Idle
+		# decide flow control based on execution status of the operation code
+		return EPlanFlowCtrl.Next if ( opCode.state == ECodeExecState.Done ) else EPlanFlowCtrl.Wait
 
 	def __handleEntry( self, planState: EPlanState, opCode: COpCode ):
+		self.currLineNo = opCode.lineNo
 		match opCode.codeNo:
 			case EParseCmd.Wait:
 				opCode.timer = 0
-				opCode.State = ECodeExecState.InExec
+				opCode.state = ECodeExecState.InExec
 				pass
 
 			case EParseCmd.SetReg:
-				# SET_REG( regNo, regType, regVal )
-				regId = packRegId( opCode.args[ 0 ], EMcpRegType( opCode.args[ 1 ] ) )
-				self.mcp.Cmd_SetRegister( regId, opCode.args[ 2 ] )
-				opCode.State = ECodeExecState.Done
+				regId = packRegId( opCode.args[ 0 ].regNo, opCode.args[ 0 ].regType, self.mcp.motorNo )
+				regVal = encodeRegVal( \
+					opCode.args[ 0 ].regNo, \
+					opCode.args[ 0 ].regType, \
+					opCode.args[ 0 ].regVal )
+				self.mcp.Cmd_SetRegister( regId, regVal )
+				opCode.state = ECodeExecState.Done
 				pass
 
 			case EParseCmd.Start:
-				# START()
 				self.mcp.Cmd_StartMotor()
-				opCode.State = ECodeExecState.Done
+				opCode.state = ECodeExecState.Done
 				pass
 
 			case EParseCmd.Stop:
-				# STOP()
 				self.mcp.Cmd_StopMotor()
-				opCode.State = ECodeExecState.Done
+				opCode.state = ECodeExecState.Done
 				pass
 
 			case EParseCmd.StopRamp:
-				# STOP_RAMP()
 				self.mcp.Cmd_StopRamp()
-				opCode.State = ECodeExecState.Done
+				opCode.state = ECodeExecState.Done
 				pass
 
 			case EParseCmd.StopStart:
-				# STOP_START()
 				self.mcp.Cmd_StartStop()
-				opCode.State = ECodeExecState.Done
+				opCode.state = ECodeExecState.Done
 				pass
 
 			case EParseCmd.SpdRamp:
-				# SPD_RAMP( TARGET_SPD, DURATION )
-				self.mcp.Cmd_SetSpdRamp( opCode.args[ 0 ], opCode.args[ 1 ] )
-				opCode.State = ECodeExecState.InExec
+				self.mcp.Cmd_SetSpdRamp( opCode.args[ 0 ].spd, opCode.args[ 0 ].duration )
+				opCode.state = ECodeExecState.InExec
 				pass
 
 			case _:
-				opCode.State = ECodeExecState.Done
+				opCode.state = ECodeExecState.Done
 				pass
 		pass
 
-	def __handleExec( self, planState: EPlanState, opCode: COpCode ):
+	def __handleExec( self, planState: EPlanState, opCode: COpCode ) -> None:
 		match opCode.codeNo:
 			case EParseCmd.Wait:
-				if opCode.timer >= opCode.args[ 0 ]:
-					opCode.execState = ECodeExecState.Done
-					return
+				if opCode.timer >= opCode.args[ 0 ].duration:
+					opCode.state = ECodeExecState.Done
+					return None
 				opCode.timer += self.planItvl
 				pass
 
 			case EParseCmd.SpdRamp:
-				if self.mcp.fbkSpd >= opCode.args[ 0 ]:
-					opCode.execState = ECodeExecState.Done
-					return
+				if self.mcp.fbkSpd >= opCode.args[ 0 ].spd:
+					opCode.state = ECodeExecState.Done
+					return None
 
-				if ( opCode.timer * 1000.0 ) >= opCode.args[ 1 ]:
-					opCode.execState = ECodeExecState.Done
-					return
+				if ( opCode.timer * 1000.0 ) >= opCode.args[ 0 ].duration:
+					opCode.state = ECodeExecState.Done
+					return None
 				opCode.timer += self.planItvl
 				pass
 
 			case _:
-				opCode.execState = ECodeExecState.Done
+				opCode.state = ECodeExecState.Done
 				pass
 		pass
 

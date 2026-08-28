@@ -44,21 +44,20 @@ class CRobiGui():
 		self.lowFreqTick.start( 1000 ) # unit [ sec ]
 
 		# init widgets one by one based on functionality
+		# init grid layout
+		self.layout = QtWidgets.QGridLayout()
 		self.__initConnectPanel()
+		self.__initStatusPanel()
 		self.__initRegCtrl()
 		self.__initFileOp()
 
-		self.tBoxVBus = QtWidgets.QLineEdit( self.window )
-		self.tBoxVBus.setText( "0" )
-		self.tBoxVBus.setPlaceholderText( "VBus" )
-		self.tBoxVBus.resize( 100, 30 )
-		self.tBoxVBus.move( 10, 120 )
-
-		self.tBoxTemp = QtWidgets.QLineEdit( self.window )
-		self.tBoxTemp.setText( "0" )
-		self.tBoxTemp.setPlaceholderText( "VBus" )
-		self.tBoxTemp.resize( 100, 30 )
-		self.tBoxTemp.move( 110, 120 )
+		# finalize the window setting
+		self.central_widget = QtWidgets.QWidget()
+		self.window.setCentralWidget( self.central_widget )
+		self.layout.setSpacing( 10 )			# 設定網格上下左右的間距為 10 像素
+		#self.layout.setColumnStretch( 1, 2 )	# 讓第 1 列的寬度伸縮比例為其他列的 2 倍
+		#self.layout.setRowStretch( 1, 3 )		# 讓第 1 行（文字區）的高度伸縮比例為其他行的 
+		self.central_widget.setLayout( self.layout )
 		pass
 
 	def exec( self ) -> None:
@@ -68,92 +67,120 @@ class CRobiGui():
 
 # widgets initialization
 	def __initConnectPanel( self ) -> None:
-		self.lblConnState = QtWidgets.QLabel( "State: Idle", self.window )
-		self.lblConnState.move( 200, 200 )
-
-		self.lblMcpVer = QtWidgets.QLabel( "", self.window )
-		self.lblMcpVer.move( 200, 250 )
-
-		self.btnRefresh = QtWidgets.QPushButton( self.window )
+		self.btnRefresh = QtWidgets.QPushButton()
 		self.btnRefresh.setText( "Refresh" )
-		self.btnRefresh.setGeometry( 0, 0, 100, 30 )
 		self.btnRefresh.clicked.connect( self.__btnRefreshClick )
+		self.layout.addWidget( self.btnRefresh, 0, 0 )
 		
-		self.btnConnect = QtWidgets.QPushButton( self.window )
+		self.btnConnect = QtWidgets.QPushButton()
 		self.btnConnect.setText( TEXT_CONNECT )
-		self.btnConnect.setGeometry( 400, 0, 100, 30 )
 		self.btnConnect.clicked.connect( self.__btnConnectClick )
+		self.layout.addWidget( self.btnConnect, 0, 4 )
 
-		self.tBoxMotorNo = QtWidgets.QLineEdit( self.window )
+		self.tBoxMotorNo = QtWidgets.QLineEdit()
 		self.tBoxMotorNo.setText( "1" )
 		self.tBoxMotorNo.setPlaceholderText( "MotorNo" )
-		self.tBoxMotorNo.resize( 100, 30 )
-		self.tBoxMotorNo.move( 300, 0 )
+		self.layout.addWidget( self.tBoxMotorNo, 0, 1 )
 		
-		self.tBoxBaud = QtWidgets.QLineEdit( self.window )
+		self.tBoxBaud = QtWidgets.QLineEdit()
 		self.tBoxBaud.setText( "1843200" )
 		self.tBoxBaud.setPlaceholderText( "Baudrate" )
-		self.tBoxBaud.resize( 100, 30 )
-		self.tBoxBaud.move( 200, 0 )
+		self.layout.addWidget( self.tBoxBaud, 0, 2 )
 
-		self.ComBoxPortName = QtWidgets.QComboBox( self.window )
-		self.ComBoxPortName.move( 100, 0 )
+		self.ComBoxPortName = QtWidgets.QComboBox()
 		ports = serial.tools.list_ports.comports()
 		for port in ports:
 			self.ComBoxPortName.addItem( port.device )
 		pass
+		self.layout.addWidget( self.ComBoxPortName, 0, 3 )
+		pass
+
+	def __initStatusPanel( self ) -> None:
+		self.lblConnState = QtWidgets.QLabel( "Conn. State:")
+		self.layout.addWidget( self.lblConnState, 1, 0 )
+
+		self.tBoxConnState = QtWidgets.QLineEdit( self.window )
+		self.tBoxConnState.setText( "Idle" )
+		self.tBoxConnState.setPlaceholderText( "Conn. State" )
+		self.layout.addWidget( self.tBoxConnState, 1, 1 )
+
+		self.lblMcpVer = QtWidgets.QLabel( "MCP Ver:")
+		self.layout.addWidget( self.lblMcpVer, 1, 2 )
+
+		self.tBoxMcpVer = QtWidgets.QLineEdit()
+		self.tBoxMcpVer.setText( "0" )
+		self.tBoxMcpVer.setPlaceholderText( "Ver." )
+		self.layout.addWidget( self.tBoxMcpVer, 1, 3, 1, 2 )
+
+		self.tBoxVBus = QtWidgets.QLineEdit()
+		self.tBoxVBus.setText( "0" )
+		self.tBoxVBus.setPlaceholderText( "VBus" )
+		self.layout.addWidget( self.tBoxVBus, 2, 0 )
+
+		self.tBoxTemp = QtWidgets.QLineEdit()
+		self.tBoxTemp.setText( "0" )
+		self.tBoxTemp.setPlaceholderText( "Temp" )
+		self.layout.addWidget( self.tBoxTemp, 2, 1 )
+		pass
 
 	def __initRegCtrl( self ) -> None:
-		self.ComBoxRegType = QtWidgets.QComboBox( self.window )
+		self.ComBoxRegType = QtWidgets.QComboBox()
 		self.ComBoxRegType.addItems( [ \
 			EGuiRegTypeTxt.BIT8.value, EGuiRegTypeTxt.BIT16.value, EGuiRegTypeTxt.BIT32.value, \
 			EGuiRegTypeTxt.STR.value, EGuiRegTypeTxt.RAW.value ] )
-		self.ComBoxRegType.move( 100, 50 )
+		self.layout.addWidget( self.ComBoxRegType, 3, 0 )
 
-		self.tBoxRegNo = QtWidgets.QLineEdit( self.window )
+		self.tBoxRegNo = QtWidgets.QLineEdit( )
 		self.tBoxRegNo.setText( "0x001" )
 		self.tBoxRegNo.setPlaceholderText( "Addr." )
-		self.tBoxRegNo.resize( 100, 30 )
-		self.tBoxRegNo.move( 200, 50 )
+		self.layout.addWidget( self.tBoxRegNo, 3, 1 )
 
-		self.tBoxRegVal = QtWidgets.QLineEdit( self.window )
+		self.tBoxRegVal = QtWidgets.QLineEdit()
 		self.tBoxRegVal.setText( "0x000" )
 		self.tBoxRegVal.setPlaceholderText( "Val." )
-		self.tBoxRegVal.resize( 200, 30 )
-		self.tBoxRegVal.move( 100, 80 )
+		self.layout.addWidget( self.tBoxRegVal, 4, 1, 1, 3 )
 
-		self.btnGetReg = QtWidgets.QPushButton( self.window )
+		self.btnGetReg = QtWidgets.QPushButton()
 		self.btnGetReg.setText( "GetReg" )
-		self.btnGetReg.setGeometry( 0, 50, 100, 30 )
 		self.btnGetReg.clicked.connect( self.__btnGetRegClick )
+		self.layout.addWidget( self.btnGetReg, 4, 0 )
 
-		self.btnSetReg = QtWidgets.QPushButton( self.window )
+		self.btnSetReg = QtWidgets.QPushButton()
 		self.btnSetReg.setText( "SetReg" )
-		self.btnSetReg.setGeometry( 0, 80, 100, 30 )
 		self.btnSetReg.clicked.connect( self.__btnSetRegClick )
+		self.layout.addWidget( self.btnSetReg, 5, 0 )
 		pass
 
 	def __initFileOp( self ) -> None:
-		self.btnFileSelect = QtWidgets.QPushButton( self.window )
+		self.btnFileSelect = QtWidgets.QPushButton()
 		self.btnFileSelect.setText( "Selelct" )
-		self.btnFileSelect.setGeometry( 0, 160, 100, 30 )
 		self.btnFileSelect.clicked.connect( self.__btnFileSelectClick )
+		self.layout.addWidget( self.btnFileSelect, 6, 0 )
 
-		self.btnCtrlPlay = QtWidgets.QPushButton( self.window )
+		self.btnCtrlPlay = QtWidgets.QPushButton()
 		self.btnCtrlPlay.setText( "Play" )
-		self.btnCtrlPlay.setGeometry( 0, 190, 100, 30 )
 		self.btnCtrlPlay.clicked.connect( self.__btnCtrlPlayClick )
+		self.layout.addWidget( self.btnCtrlPlay, 7, 0 )
 
-		self.btnCtrlStop = QtWidgets.QPushButton( self.window )
+		self.btnCtrlStop = QtWidgets.QPushButton()
 		self.btnCtrlStop.setText( "Stop" )
-		self.btnCtrlStop.setGeometry( 100, 190, 100, 30 )
 		self.btnCtrlStop.clicked.connect( self.__btnCtrlStopClick )
+		self.layout.addWidget( self.btnCtrlStop, 8, 0 )
 
-		self.tBoxFilePath = QtWidgets.QLineEdit( self.window )
+		self.tBoxFilePath = QtWidgets.QLineEdit()
 		self.tBoxFilePath.setText( "" )
-		self.tBoxFilePath.setPlaceholderText( "Path" )
-		self.tBoxFilePath.resize( 500, 30 )
-		self.tBoxFilePath.move( 100, 160 )
+		self.tBoxFilePath.setPlaceholderText( "Script Path" )
+		self.layout.addWidget( self.tBoxFilePath, 6, 1, 1, 3 )
+
+		self.tBoxPlanState = QtWidgets.QLineEdit()
+		self.tBoxPlanState.setText( "Idle" )
+		self.tBoxPlanState.setPlaceholderText( "Planner State" )
+		self.layout.addWidget( self.tBoxPlanState, 7, 1 )
+
+		self.tBoxLineNo = QtWidgets.QLineEdit()
+		self.tBoxLineNo.setText( "0" )
+		self.tBoxLineNo.setPlaceholderText( "LineNo" )
+		self.layout.addWidget( self.tBoxLineNo, 8, 1 )
 		pass
 
 # interaction events
@@ -250,6 +277,7 @@ class CRobiGui():
 		pass
 
 	def __btnCtrlStopClick( self ) -> None:
+		self.planner.stop()
 		pass
 
 # tick (timer) events
@@ -260,25 +288,27 @@ class CRobiGui():
 		if self.state == EGuiState.Connecting:
 			match self.mcp.getAspepState():
 				case EMcpState.Idle:
-					self.lblConnState.setText( f"State: Idle" )
+					self.tBoxConnState.setText( f"Idle" )
 					pass
 				case EMcpState.Config:
-					self.lblConnState.setText( f"State: Configuration" )
+					self.tBoxConnState.setText( f"Configuration" )
 					pass
 				case EMcpState.Connecting:
-					self.lblConnState.setText( f"State: Connecting" )
+					self.tBoxConnState.setText( f"Connecting" )
 					pass
 				case EMcpState.Connected:
-					self.lblConnState.setText( f"State: Connected" )
+					self.tBoxConnState.setText( f"Connected" )
 					self.state = EGuiState.Connected
 
 					_, ver = self.mcp.Cmd_GetMcpVer()
-					self.lblMcpVer.setText( f"MCP ver.{ ver }" )
+					self.tBoxMcpVer.setText( f"{ ver }" )
 					pass
 			return
 
 		if self.state == EGuiState.Connected:
 			# perform fields update routine
+			self.tBoxPlanState.setText( str( self.planner.getState() ) )
+			self.tBoxLineNo.setText( str( self.planner.currLineNo ) )
 			self.tBoxVBus.setText( str( self.mcp.regVBus ) )
 			self.tBoxTemp.setText( str( self.mcp.regTemp ) )
 			pass

@@ -263,7 +263,7 @@ class EMcpRegType( Enum ):
 	Reserved3 = 7
 	pass
 
-def packRegId( regNo: int, regType: EMcpRegType, motorNo ) -> bytes:
+def packRegId( regNo: int, regType: EMcpRegType, motorNo: int ) -> bytes:
 	payload = motorNo | ( regType.value << 3 ) | ( regNo << 6 )
 	byte0 = payload & 0xFF
 	byte1 = ( payload >> 8 ) & 0xFF
@@ -278,17 +278,50 @@ def unpackRegId( regId: bytes ) -> tuple[ int, EMcpRegType, int ]:
 	regtype = EMcpRegType( regTypeRaw )
 	return regNo, regtype, motorNo
 
-def decodeRegVal( type: EMcpRegType, regNo: int, packedBytes: bytes, startPos: int = 0 ) \
+def encodeRegVal( regNo: int, regType: EMcpRegType, regVal ) -> bytes:
+	'''轉換 register 數值為 bytes 型別
+	Args:
+		regNo(int): register number
+		regType(EMcpRegType): register value 型別
+		regVal: register 數值
+	'''
+	packedBytes = bytes()
+	match regType:
+		case EMcpRegType.Bit8:
+			packedBytes = regVal.to_bytes( 1, 'little' )
+			pass
+
+		case EMcpRegType.Bit16:
+			packedBytes = regVal.to_bytes( 2, 'little' )
+			pass
+
+		case EMcpRegType.Bit32:
+			packedBytes = regVal.to_bytes( 4, 'little' )
+			pass
+
+		case EMcpRegType.RawStruct:
+			# TBD
+			pass
+
+		case _:
+			raise TypeError( "指定 EMcpRegType 不存在" )
+			pass
+		
+	return packedBytes
+
+def decodeRegVal( regNo: int, regType: EMcpRegType, packedBytes: bytes, startPos: int = 0 ) \
 	-> tuple[ bool, int, int ] | tuple[ bool, int, str ] | tuple[ bool, int, bytes ]:
-	match type:
+	match regType:
 		case EMcpRegType.Bit8:
 			byteShift = 1
 			regVal = int( packedBytes[ startPos ] )
 			pass
+
 		case EMcpRegType.Bit16:
 			byteShift = 2
 			regVal = int( packedBytes[ startPos ] ) | ( int( packedBytes[ startPos + 1 ] ) << 8 )
 			pass
+
 		case EMcpRegType.Bit32:
 			byteShift = 4
 			regVal = \
@@ -297,11 +330,13 @@ def decodeRegVal( type: EMcpRegType, regNo: int, packedBytes: bytes, startPos: i
 				( int( packedBytes[ startPos + 2 ] ) << 16 ) | \
 				( int( packedBytes[ startPos + 3 ] ) << 24 ) 
 			pass
+
 		case EMcpRegType.RawStruct:
 			regEnum = EMcpRawStructReg( regNo )
-			byteshift = struct.calcsize( McpRawStructFmt.get( regEnum ) )
+			byteShift = struct.calcsize( McpRawStructFmt.get( regEnum ) )
 			regVal = packedBytes[ startPos: ( startPos + byteShift ) ]
 			pass
+
 		case _:
 			byteShift = 0
 			return False, startPos, 0

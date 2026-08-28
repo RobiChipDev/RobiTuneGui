@@ -23,6 +23,41 @@ class EParseCmd( Enum ):
 	SpdRamp = 9
 	TorqRamp = 10
 
+class CArgWait():
+	def __init__( self, time: float ):
+		self.duration = time
+		pass
+	pass
+
+class CArgSetReg():
+	def __init__( self, regNo: int, regType: EMcpRegType, regVal: int ):
+		self.regNo = regNo
+		self.regType = regType
+		self.regVal = regVal
+		pass
+	pass
+
+class CArgPosRamp():
+	def __init__( self, targetPosition, duration, ):
+		self.pos = targetPosition
+		self.duration = duration
+		pass
+	pass
+
+class CArgSpdRamp():
+	def __init__( self, targetSpeed, duration ):
+		self.spd = targetSpeed
+		self.duration = duration
+		pass
+	pass
+
+class CArgTorqRamp():
+	def __init__( self, targetTorq, duration ):
+		self.torq = targetTorq
+		self.duration = duration
+		pass
+	pass
+
 class CRobiParser:
 	"""
 	基於 PLY 封裝的四則運算與變數解析器 Class
@@ -175,10 +210,11 @@ class CRobiParser:
 			return EParseState.End
 
 	def discard( self, keepState: bool = True ) -> None:
-		"""
-		丟棄尚未解譯的文本。
-		keepState = True: 保留所有變數與佇列
-		keepState = False: 清空所有變數與佇列
+		"""丟棄尚未解譯的文本。
+		Args:
+			keepState(bool): 
+				True: 保留所有變數與佇列
+				False: 清空所有變數與佇列
         """
 		self._exec = None  # 將產生器設為 None，讓 Python 垃圾回收掉後續任務
 		if keepState == False:
@@ -225,8 +261,10 @@ class CRobiParser:
 
 			case 'WAIT':
 				self.currLineNo = node[ 2 ]
-				arg = yield from self.execute( node[ 1 ] )
-				cmd = [ EParseCmd.Wait, arg ]
+				time = yield from self.execute( node[ 1 ] )
+
+				args = CArgWait( time )
+				cmd = [ EParseCmd.Wait, self.currLineNo, args ]
 				self.queue.append( cmd )
 				return cmd
 
@@ -245,73 +283,85 @@ class CRobiParser:
 
 			case 'SET_REG_8BIT':
 				self.currLineNo = node[ 3 ]
-				arg1 = yield from self.execute( node[ 1 ] )	# regNo
-				arg2 = yield from self.execute( node[ 2 ] )	# regVal
-				cmd = [ EParseCmd.SetReg, arg1, EMcpRegType.Bit8, arg2 ]
+				regNo = yield from self.execute( node[ 1 ] )
+				regVal = yield from self.execute( node[ 2 ] )
+
+				args = CArgSetReg( regNo, EMcpRegType.Bit8, regVal )
+				cmd = [ EParseCmd.SetReg, self.currLineNo, args ]
 				self.queue.append( cmd )
 				return cmd
 
 			case 'SET_REG_16BIT':
 				self.currLineNo = node[ 3 ]
-				arg1 = yield from self.execute( node[ 1 ] )	# regNo
-				arg2 = yield from self.execute( node[ 2 ] )	# regVal
-				cmd = [ EParseCmd.SetReg, arg1, EMcpRegType.Bit16, arg2 ]
+				regNo = yield from self.execute( node[ 1 ] )
+				regVal = yield from self.execute( node[ 2 ] )
+
+				args = CArgSetReg( regNo, EMcpRegType.Bit16, regVal )
+				cmd = [ EParseCmd.SetReg, self.currLineNo, args ]
 				self.queue.append( cmd )
 				return cmd
 
 			case 'SET_REG_32BIT':
 				self.currLineNo = node[ 3 ]
-				arg1 = yield from self.execute( node[ 1 ] )	# regNo
-				arg2 = yield from self.execute( node[ 2 ] )	# regVal
-				cmd = [ EParseCmd.SetReg, arg1, EMcpRegType.Bit32, arg2 ]
+				regNo = yield from self.execute( node[ 1 ] )
+				regVal = yield from self.execute( node[ 2 ] )
+
+				args = CArgSetReg( regNo, EMcpRegType.Bit32, regVal )
+				cmd = [ EParseCmd.SetReg, self.currLineNo, args ]
 				self.queue.append( cmd )
 				return cmd
 
 			case 'START':
 				self.currLineNo = node[ 1 ]
-				cmd = [ EParseCmd.Start ]
+				cmd = [ EParseCmd.Start, self.currLineNo ]
 				self.queue.append( cmd )
 				return cmd
 
 			case 'STOP':
 				self.currLineNo = node[ 1 ]
-				cmd = [ EParseCmd.Stop ]
+				cmd = [ EParseCmd.Stop, self.currLineNo ]
 				self.queue.append( cmd )
 				return cmd
 
 			case 'STOP_RAMP':
 				self.currLineNo = node[ 1 ]
-				cmd = [ EParseCmd.StopRamp ]
+				cmd = [ EParseCmd.StopRamp, self.currLineNo ]
 				self.queue.append( cmd )
 				return cmd
 
 			case 'STOP_START':
 				self.currLineNo = node[ 1 ]
-				cmd = [ EParseCmd.StopStart ]
+				cmd = [ EParseCmd.StopStart, self.currLineNo ]
 				self.queue.append( cmd )
 				return cmd
 
 			case 'POS_RAMP':
 				self.currLineNo = node[ 3 ]
-				arg1 = yield from self.execute( node[ 1 ] ) # target position
-				arg2 = yield from self.execute( node[ 2 ] ) # duration
-				cmd = [ EParseCmd.PosRamp, arg1, arg2 ]
+				position = yield from self.execute( node[ 1 ] )
+				duration = yield from self.execute( node[ 2 ] )
+
+				args = CArgPosRamp( position, duration, )
+				cmd = [ EParseCmd.PosRamp, self.currLineNo, args ]
 				self.queue.append( cmd )
 				return cmd
 
 			case 'SPD_RAMP':
 				self.currLineNo = node[ 3 ]
-				arg1 = yield from self.execute( node[ 1 ] )	# target speed
-				arg2 = yield from self.execute( node[ 2 ] )	# duration
-				cmd = [ EParseCmd.SpdRamp, arg1, arg2 ]
+				speed = yield from self.execute( node[ 1 ] )
+				duration = yield from self.execute( node[ 2 ] )
+
+				args = CArgSpdRamp( speed, duration )
+				cmd = [ EParseCmd.SpdRamp, self.currLineNo, args ]
 				self.queue.append( cmd )
 				return cmd
 
 			case 'TORQ_RAMP':
 				self.currLineNo = node[ 3 ]
-				arg1 = yield from self.execute( node[ 1 ] )	# target torque
-				arg2 = yield from self.execute( node[ 2 ] ) # duration
-				cmd = [ EParseCmd.TorqRamp, arg1, arg2 ]
+				torq = yield from self.execute( node[ 1 ] )
+				duration = yield from self.execute( node[ 2 ] )
+
+				args = CArgTorqRamp( torq, duration )
+				cmd = [ EParseCmd.TorqRamp, self.currLineNo, args ]
 				self.queue.append( cmd )
 				return cmd
 
