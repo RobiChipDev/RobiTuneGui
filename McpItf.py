@@ -189,7 +189,7 @@ class CMcpItf():
 		regVal = None
 		for i in range( 0, len( args ), 1 ):
 			regNo, regType, motorNo = unpackRegId( args[ i ] )
-			isValid, byteCount, regVal = decodeRegVal( regNo, regType, respPayload, byteCount )
+			isValid, byteCount, regVal = unpackRegVal( regNo, regType, respPayload, byteCount )
 			if isValid == False:
 				break
 			rtnValList.append( regVal )
@@ -245,11 +245,13 @@ class CMcpItf():
 	def Cmd_SetSpdRamp( self, targetSpd: int, duration: int ):
 		'''Set the speed ramp-up curve. If the motor is already running, it will begin accelerating immediately.
 		Args:
-			targetSpd (int): The total path length traveled. unit[ RPM ].
+			targetSpd (int): The total path length traveled. unit[ rpm ].
 			duration (int): The duration of movement. unit[ sec ]
 		'''
+		payload = struct.pack( McpRawStructFmt.get( EMcpRawStructReg.SpdRamp ), targetSpd, duration )
+
 		packedBytes = packRegId( EMcpRawStructReg.SpdRamp.value, EMcpRegType.RawStruct, self.motorNo )
-		packedBytes += struct.pack( McpRawStructFmt.get( EMcpRawStructReg.SpdRamp ), targetSpd, duration )
+		packedBytes += packRegVal( EMcpRawStructReg.SpdRamp.value, EMcpRegType.RawStruct, payload )
 		sendBytes = self.__packCommand( motorNo = self.motorNo, cmdId = 0x0001, payload = packedBytes )
 		statusCode, respPayload = self.__sendRecv( sendBytes )
 

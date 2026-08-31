@@ -200,7 +200,7 @@ class EMcpRawStructReg( Enum ):
 	AppConfig = 2			# MC_REG_APPLICATION_CONFIG       ((2U << ELT_IDENTIFIER_POS) | TYPE_DATA_RAW)
 	FocFwConfig = 3			# MC_REG_FOCFW_CONFIG             ((3U << ELT_IDENTIFIER_POS) | TYPE_DATA_RAW)
 	ScaleConfig = 4			# MC_REG_SCALE_CONFIG             ((4U << ELT_IDENTIFIER_POS) | TYPE_DATA_RAW)
-	SpdRamp = 5				# MC_REG_SPEED_RAMP               ((6U << ELT_IDENTIFIER_POS) | TYPE_DATA_RAW)
+	SpdRamp = 6				# MC_REG_SPEED_RAMP               ((6U << ELT_IDENTIFIER_POS) | TYPE_DATA_RAW)
 	TorqRamp = 7			# MC_REG_TORQUE_RAMP              ((7U << ELT_IDENTIFIER_POS) | TYPE_DATA_RAW)
 	RevupData = 8			# MC_REG_REVUP_DATA               ((8U << ELT_IDENTIFIER_POS) | TYPE_DATA_RAW) 
 	CurrentRef = 13			# MC_REG_CURRENT_REF              ((13U << ELT_IDENTIFIER_POS) | TYPE_DATA_RAW)
@@ -278,7 +278,7 @@ def unpackRegId( regId: bytes ) -> tuple[ int, EMcpRegType, int ]:
 	regtype = EMcpRegType( regTypeRaw )
 	return regNo, regtype, motorNo
 
-def encodeRegVal( regNo: int, regType: EMcpRegType, regVal ) -> bytes:
+def packRegVal( regNo: int, regType: EMcpRegType, regVal: int | str | bytes ) -> bytes:
 	'''轉換 register 數值為 bytes 型別
 	Args:
 		regNo(int): register number
@@ -299,17 +299,24 @@ def encodeRegVal( regNo: int, regType: EMcpRegType, regVal ) -> bytes:
 			packedBytes = regVal.to_bytes( 4, 'little' )
 			pass
 
+		case EMcpRegType.Str:
+			# STRING type registers are NULL terminated text strings.
+			pass
+
 		case EMcpRegType.RawStruct:
-			# TBD
+			# RAWSTRUCT registers are buffers which sizes are indicated in the first two bytes of the values
+			regEnum = EMcpRawStructReg( regNo )
+			bufSize = struct.calcsize( McpRawStructFmt.get( regEnum ) )
+			packedBytes = bufSize.to_bytes( 2, 'little' )
+			packedBytes += regVal
 			pass
 
 		case _:
 			raise TypeError( "指定 EMcpRegType 不存在" )
-			pass
 		
 	return packedBytes
 
-def decodeRegVal( regNo: int, regType: EMcpRegType, packedBytes: bytes, startPos: int = 0 ) \
+def unpackRegVal( regNo: int, regType: EMcpRegType, packedBytes: bytes, startPos: int = 0 ) \
 	-> tuple[ bool, int, int ] | tuple[ bool, int, str ] | tuple[ bool, int, bytes ]:
 	match regType:
 		case EMcpRegType.Bit8:
@@ -331,10 +338,19 @@ def decodeRegVal( regNo: int, regType: EMcpRegType, packedBytes: bytes, startPos
 				( int( packedBytes[ startPos + 3 ] ) << 24 ) 
 			pass
 
+		case EMcpRegType.Str:
+			# STRING type registers are NULL terminated text strings.
+			pass
+
 		case EMcpRegType.RawStruct:
+			# RAWSTRUCT registers are buffers which sizes are indicated in the first two bytes of the values
 			regEnum = EMcpRawStructReg( regNo )
-			byteShift = struct.calcsize( McpRawStructFmt.get( regEnum ) )
+			byteShift = struct.calcsize( McpRawStructFmt.get( regEnum ) ) + 2
 			regVal = packedBytes[ startPos: ( startPos + byteShift ) ]
+
+			bufSize = int( regVal[ 0 ] ) | ( int( regVal[ 1 ] ) << 8 ) 
+			if ( bufSize + 2 ) != byteShift:
+				raise ValueError( "RAWSTRUCT Buffer Size 錯誤" )
 			pass
 
 		case _:

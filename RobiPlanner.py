@@ -186,7 +186,7 @@ class CRobiPlanner():
 
 			case EParseCmd.SetReg:
 				regId = packRegId( opCode.args[ 0 ].regNo, opCode.args[ 0 ].regType, self.mcp.motorNo )
-				regVal = encodeRegVal( \
+				regVal = packRegVal( \
 					opCode.args[ 0 ].regNo, \
 					opCode.args[ 0 ].regType, \
 					opCode.args[ 0 ].regVal )
