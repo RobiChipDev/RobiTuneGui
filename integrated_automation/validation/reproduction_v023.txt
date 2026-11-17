@@ -1,0 +1,48 @@
+......FFFFF
+======================================================================
+FAIL: test_old_reply_must_not_clear_new_pending (__main__.Reproduce.test_old_reply_must_not_clear_new_pending)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/v024_validation/reproduce_v023.py", line 19, in test_old_reply_must_not_clear_new_pending
+    self.assertTrue(d.pending)
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_reopen_must_keep_background_pending (__main__.Reproduce.test_reopen_must_keep_background_pending)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/v024_validation/reproduce_v023.py", line 16, in test_reopen_must_keep_background_pending
+    self.assertFalse(b.available())
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_stop_after_write_must_not_clear_unverified (__main__.Reproduce.test_stop_after_write_must_not_clear_unverified)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/v024_validation/reproduce_v023.py", line 26, in test_stop_after_write_must_not_clear_unverified
+    w.pid_command(('speed_kp',100,200));self.assertTrue(w.pid_unverified)
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_stop_then_late_read_must_not_restore (__main__.Reproduce.test_stop_then_late_read_must_not_restore)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/v024_validation/reproduce_v023.py", line 13, in test_stop_then_late_read_must_not_restore
+    self.assertEqual(d.values,{})
+AssertionError: {'speed_kp': 100} != {}
+- {'speed_kp': 100}
++ {}
+
+======================================================================
+FAIL: test_success_row_must_remain_verified (__main__.Reproduce.test_success_row_must_remain_verified)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/v024_validation/reproduce_v023.py", line 31, in test_success_row_must_remain_verified
+    self.assertIn('已驗證',d.notes['speed_kp'].get())
+AssertionError: '已驗證' not found in '與板端相同'
+
+----------------------------------------------------------------------
+Ran 11 tests in 0.009s
+
+FAILED (failures=5)

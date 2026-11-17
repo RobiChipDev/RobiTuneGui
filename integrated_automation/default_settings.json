@@ -1,0 +1,42 @@
+{
+  "port": "COM5",
+  "speeds": [
+    1500,
+    1600
+  ],
+  "max_rpm": 7100,
+  "ramp_ms": 3000,
+  "dwell_s": 10.0,
+  "baseline_s": 5.0,
+  "poststop_s": 10.0,
+  "reach_timeout_s": 30.0,
+  "folder": "~/Documents/Robi/ExperimentData",
+  "force_enabled": true,
+  "force_port": "COM6",
+  "force_baud": 9600,
+  "force_addr": 1,
+  "force_parity": "N",
+  "force_stopbits": 1,
+  "force_order": "HH-LL",
+  "force_interval": 0.1,
+  "scale1": 0.01,
+  "scale2": 0.001,
+  "unit1": "N",
+  "unit2": "Nm",
+  "thrust_channel": 1,
+  "torque_channel": 2,
+  "psu_enabled": false,
+  "psu_backend": "SERIAL",
+  "psu_resource": "",
+  "psu_baud": 115200,
+  "psu_channels": [
+    1
+  ],
+  "psu_interval": 1.0,
+  "zero1": 0.0,
+  "zero2": 0.0,
+  "run_name": "",
+  "speed_kp": "",
+  "speed_ki": "",
+  "speed_kd": ""
+}

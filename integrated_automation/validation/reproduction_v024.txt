@@ -1,0 +1,68 @@
+test_disconnect_stop_does_not_lose_intent (test_reproduce_v024.Reproduce.test_disconnect_stop_does_not_lose_intent) ... OBSERVED motor_present=True blocked=True queue_empty=True
+FAIL
+test_force_off_pending_rejects_before_files (test_reproduce_v024.Reproduce.test_force_off_pending_rejects_before_files) ... OBSERVED force=False: fake motor starts=1
+FAIL
+test_force_on_pending_rejects_before_files (test_reproduce_v024.Reproduce.test_force_on_pending_rejects_before_files) ... OBSERVED force=True: session folder already exists; PID 交易尚未完成。
+FAIL
+test_operation_hint_survives_refresh (test_reproduce_v024.Reproduce.test_operation_hint_survives_refresh) ... FAIL
+
+======================================================================
+FAIL: test_disconnect_stop_does_not_lose_intent (test_reproduce_v024.Reproduce.test_disconnect_stop_does_not_lose_intent)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/v025_validation/test_reproduce_v024.py", line 58, in test_disconnect_stop_does_not_lose_intent
+    self.assertIsNone(w.motor)
+AssertionError: <test_reproduce_v024.GateMotor object at 0x7f7b53828c50> is not None
+
+======================================================================
+FAIL: test_force_off_pending_rejects_before_files (test_reproduce_v024.Reproduce.test_force_off_pending_rejects_before_files)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/v025_validation/test_reproduce_v024.py", line 50, in test_force_off_pending_rejects_before_files
+    def test_force_off_pending_rejects_before_files(self):self.pending_begin(False)
+                                                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/edfb6e811fa0/v025_validation/test_reproduce_v024.py", line 48, in pending_begin
+    self.assertEqual(list(Path(folder).iterdir()),[])
+AssertionError: Lists differ: [PosixPath('/tmp/tmpjzen_fwb/1500-1600rpm')] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+PosixPath('/tmp/tmpjzen_fwb/1500-1600rpm')
+
+- [PosixPath('/tmp/tmpjzen_fwb/1500-1600rpm')]
++ []
+
+======================================================================
+FAIL: test_force_on_pending_rejects_before_files (test_reproduce_v024.Reproduce.test_force_on_pending_rejects_before_files)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/v025_validation/test_reproduce_v024.py", line 51, in test_force_on_pending_rejects_before_files
+    def test_force_on_pending_rejects_before_files(self):self.pending_begin(True)
+                                                         ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/edfb6e811fa0/v025_validation/test_reproduce_v024.py", line 48, in pending_begin
+    self.assertEqual(list(Path(folder).iterdir()),[])
+AssertionError: Lists differ: [PosixPath('/tmp/tmp970gzvq6/1500-1600rpm')] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+PosixPath('/tmp/tmp970gzvq6/1500-1600rpm')
+
+- [PosixPath('/tmp/tmp970gzvq6/1500-1600rpm')]
++ []
+
+======================================================================
+FAIL: test_operation_hint_survives_refresh (test_reproduce_v024.Reproduce.test_operation_hint_survives_refresh)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/v025_validation/test_reproduce_v024.py", line 62, in test_operation_hint_survives_refresh
+    before=d.status.get();d.refresh();self.assertEqual(d.status.get(),before)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'PID #1 / G0 讀取板端：已讀取板端。' != '數值須在 0 至 32767 之間。'
+- PID #1 / G0 讀取板端：已讀取板端。
++ 數值須在 0 至 32767 之間。
+
+
+----------------------------------------------------------------------
+Ran 4 tests in 4.130s
+
+FAILED (failures=4)

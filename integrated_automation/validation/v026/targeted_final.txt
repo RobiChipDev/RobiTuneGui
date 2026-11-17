@@ -1,0 +1,13 @@
+test_available_reads_one_shared_snapshot (test_pid_refinements.RefinementTests.test_available_reads_one_shared_snapshot) ... ok
+test_competing_reservations_report_both_results (test_pid_refinements.RefinementTests.test_competing_reservations_report_both_results) ... ok
+test_finished_wait_matches_run_and_has_explicit_timeout (test_pid_refinements.RefinementTests.test_finished_wait_matches_run_and_has_explicit_timeout) ... ok
+test_injected_runtime_error_makes_competition_assertion_fail (test_pid_refinements.RefinementTests.test_injected_runtime_error_makes_competition_assertion_fail) ... ok
+test_invalid_input_does_not_damage_existing_transaction (test_pid_refinements.RefinementTests.test_invalid_input_does_not_damage_existing_transaction) ... ok
+test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) ... ok
+test_release_preserves_uncertainty_and_reservation_can_recover (test_pid_refinements.RefinementTests.test_release_preserves_uncertainty_and_reservation_can_recover) ... ok
+test_update_list_is_copied_and_signed_divisor_values_remain_valid (test_pid_refinements.RefinementTests.test_update_list_is_copied_and_signed_divisor_values_remain_valid) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.071s
+
+OK
