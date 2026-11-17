@@ -1,0 +1,8 @@
+test_empty_and_partial_are_distinct_and_close (test_psu_serial.SerialSupplyTests.test_empty_and_partial_are_distinct_and_close) ... ok
+test_field_identity_and_initialization (test_psu_serial.SerialSupplyTests.test_field_identity_and_initialization) ... ok
+test_partial_measurement_never_becomes_numeric_value (test_psu_serial.SerialSupplyTests.test_partial_measurement_never_becomes_numeric_value) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.002s
+
+OK

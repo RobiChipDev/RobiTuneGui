@@ -1,0 +1,62 @@
+--- v028/devices.py
++++ v029/devices.py
+@@ -50,7 +50,10 @@
+             elif cfg['psu_backend']=='SERIAL':
+                 import serial
+                 self.serial=True
+-                self.io=serial.Serial(cfg['psu_resource'],cfg['psu_baud'],timeout=.8,write_timeout=.5)
++                self.io=serial.Serial(cfg['psu_resource'],cfg['psu_baud'],timeout=3.0,write_timeout=1.0)
++                # Match the successful field probe: let USB CDC settle before IDN.
++                time.sleep(1.0)
++                self.io.reset_input_buffer()
+             else:
+                 import pyvisa
+                 self.rm=pyvisa.ResourceManager()
+@@ -67,7 +70,9 @@
+         if self.serial:
+             self.io.write((cmd+'\n').encode('ascii'));self.io.flush()
+             line=self.io.read_until(b'\n',256)
+-            if not line.endswith(b'\n'):raise TimeoutError('Supply reply missing LF terminator')
++            if not line.endswith(b'\n'):
++                reason='no bytes received' if not line else 'incomplete reply (missing LF)'
++                raise TimeoutError(f'{cmd}: {reason}; received={len(line)} bytes; raw={line!r}; hex={line.hex(" ")}')
+             reply=line.decode('ascii').strip()
+         else:reply=str(self.io.query(cmd)).strip()
+         if not reply:raise TimeoutError('Empty supply reply')
+--- v028/app.py
++++ v029/app.py
+@@ -30,12 +30,12 @@
+  def __init__(self,root):
+   self.root=root;self.worker=Controller();self.connected=False;self.connecting=False;self.busy=False;self.pending_begin=False;self.pending_tare=False;self.motor_stopped=False
+   self.cfg=defaults();self.values={};self.force_state='stopped';self.last_callback_error=None;self.history=[];self.dialogs=[];self.latest_output_dir=None;self.report_state='';self.last_notice=None;self.last_notice_key=None
+-  root.title('Robi v0.3.28 · 實驗監看');root.geometry('1180x790');root.minsize(1040,700)
++  root.title('Robi v0.3.29 · 實驗監看');root.geometry('1180x790');root.minsize(1040,700)
+   style=apply_theme(root)
+   outer=ttk.Frame(root,padding=(14,10));self.outer=outer;outer.pack(fill='both',expand=True)
+   heading=ttk.Frame(outer);heading.pack(fill='x',pady=(0,8))
+   ttk.Label(heading,text='Robi',font=('Segoe UI',20,'bold'),foreground='#17212f').pack(side='left')
+-  ttk.Label(heading,text='  馬達實驗工作台  /  v0.3.28',foreground='#788392').pack(side='left')
++  ttk.Label(heading,text='  馬達實驗工作台  /  v0.3.29',foreground='#788392').pack(side='left')
+   self.sim=tk.BooleanVar(value=True)
+   self.simbtn=PillButton(heading,text='實機鎖定（僅模擬）',command=self.toggle_mode,role='mode_locked',width=230,height=40);self.simbtn.pack(side='right')
+   workspace=ttk.Frame(outer);workspace.pack(fill='both',expand=True)
+@@ -522,7 +522,7 @@
+   args=run_notice(self.busy,d.phase,d.remaining,d.ended,d.reason,self.report_state)
+   if args!=self.last_notice:
+    title,detail,bg,fg=args;self.notice.configure(bg=bg);self.notice_row.configure(bg=bg);self.notice_title.configure(text=title,bg=bg,fg=fg);self.notice_detail.configure(text=detail,bg=bg,fg=fg);self.last_notice=args
+-   self.root.title('Robi v0.3.28 · '+title+(f' {max(0,d.remaining):.0f}s' if self.busy and d.phase=='poststop' else ''))
++   self.root.title('Robi v0.3.29 · '+title+(f' {max(0,d.remaining):.0f}s' if self.busy and d.phase=='poststop' else ''))
+   key='poststop' if self.busy and d.phase=='poststop' else 'ended' if d.ended and not self.busy else 'active' if self.busy else 'idle'
+   if key!=self.last_notice_key:
+    if key=='poststop':
+--- v028/controller.py
++++ v029/controller.py
+@@ -364,7 +364,7 @@
+         folder=create_session_folder(c['folder'],self.mode,c['speeds'],c.get('run_name',''),label_override=label)
+         self.path=folder/'data.csv'
+         factors = direction_factors(c.get('mount'), (propeller or {}).get('rotation'))
+-        metadata=dict(self.cfg,mode=self.mode,version='0.3.28',direction_factors=factors,
++        metadata=dict(self.cfg,mode=self.mode,version='0.3.29',direction_factors=factors,
+             pid_board_readback=pid_readback,firmware_scale_config=getattr(self.motor,'scale_config',None),
+             conversion_gravity_m_s2=9.80665,firmware_identity='operator must verify; not read back',
+             note='simulation never opens physical sensor ports; measured channels kept separate')

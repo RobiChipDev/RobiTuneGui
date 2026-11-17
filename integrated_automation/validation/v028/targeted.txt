@@ -1,0 +1,11 @@
+test_adapter_only_selected_channels (test_psu_monitor.PsuMonitorTests.test_adapter_only_selected_channels) ... ok
+test_ch2_switch_and_disable_release (test_psu_monitor.PsuMonitorTests.test_ch2_switch_and_disable_release) ... ok
+test_error_retry (test_psu_monitor.PsuMonitorTests.test_error_retry) ... ok
+test_idle_without_motor_files_and_reapply_reuses (test_psu_monitor.PsuMonitorTests.test_idle_without_motor_files_and_reapply_reuses) ... ok
+test_session_and_stop_disconnect_preserve_monitor (test_psu_monitor.PsuMonitorTests.test_session_and_stop_disconnect_preserve_monitor) ... ok
+test_simulation_no_open (test_psu_monitor.PsuMonitorTests.test_simulation_no_open) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 9.464s
+
+OK

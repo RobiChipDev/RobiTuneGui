@@ -1,0 +1,15 @@
+CHANGELOG.md
+HANDOVER_STATUS.md
+README_先看這裡.md
+RELEASE_v0.3.27.md
+VALIDATION.md
+app.py
+controller.py
+propellers.py
+test_catalog_gui.py
+test_catalog_sort.py
+validation/v027/file_diff.txt
+validation/v027/final.txt
+validation/v027/from_v026_to_v027.patch
+validation/v027/full.txt
+All other files identical; controller.py version string only.

@@ -205,3 +205,11 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Robi Integrated Automation: generated local experiment workspace
+/integrated_automation/ExperimentData/
+/integrated_automation/ExperimentSettings/
+/integrated_automation/DeviceSettings/
+/integrated_automation/.venv/
+/integrated_automation/.env.*
+# Keep source defaults, catalog examples and validation text under version control.

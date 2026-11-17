@@ -1,0 +1,196 @@
+--- v0.3.26/app.py
++++ v0.3.27/app.py
+@@ -9,7 +9,7 @@
+ from pid_dialog import PidDialog
+ from theme import apply_theme
+ from session_files import latest_session_folder, clean_filename
+-from propellers import MOUNTS, ROTATIONS, direction_factors, load_catalog, profile, run_label, save_catalog
++from propellers import MOUNTS, ROTATIONS, direction_factors, load_catalog, profile, run_label, save_catalog, sorted_catalog
+ from ui_widgets import RoundPanel,PillButton
+ from controller import Controller,validate_plan
+ from plan_preview import PlanPreview,run_notice
+@@ -30,12 +30,12 @@
+  def __init__(self,root):
+   self.root=root;self.worker=Controller();self.connected=False;self.connecting=False;self.busy=False;self.pending_begin=False;self.pending_tare=False;self.motor_stopped=False
+   self.cfg=defaults();self.values={};self.force_state='stopped';self.last_callback_error=None;self.history=[];self.dialogs=[];self.latest_output_dir=None;self.report_state='';self.last_notice=None;self.last_notice_key=None
+-  root.title('Robi v0.3.26 · 實驗監看');root.geometry('1180x790');root.minsize(1040,700)
++  root.title('Robi v0.3.27 · 實驗監看');root.geometry('1180x790');root.minsize(1040,700)
+   style=apply_theme(root)
+   outer=ttk.Frame(root,padding=(14,10));self.outer=outer;outer.pack(fill='both',expand=True)
+   heading=ttk.Frame(outer);heading.pack(fill='x',pady=(0,8))
+   ttk.Label(heading,text='Robi',font=('Segoe UI',20,'bold'),foreground='#17212f').pack(side='left')
+-  ttk.Label(heading,text='  馬達實驗工作台  /  v0.3.26',foreground='#788392').pack(side='left')
++  ttk.Label(heading,text='  馬達實驗工作台  /  v0.3.27',foreground='#788392').pack(side='left')
+   self.sim=tk.BooleanVar(value=True)
+   self.simbtn=PillButton(heading,text='實機鎖定（僅模擬）',command=self.toggle_mode,role='mode_locked',width=230,height=40);self.simbtn.pack(side='right')
+   workspace=ttk.Frame(outer);workspace.pack(fill='both',expand=True)
+@@ -154,6 +154,7 @@
+    self.worker.submit('force_start',('SIMULATION' if self.sim.get() else 'REAL',self.getcfg()))
+    self.logline('正在開啟力規監看；不啟動馬達。')
+  def set_propellers(self,entries,selected):
++  entries=sorted_catalog(entries)
+   self.propellers=entries
+   self.propeller_combo.configure(values=('未選擇',*entries))
+   self.propeller_name.set(selected if selected in entries else '未選擇')
+@@ -178,7 +179,7 @@
+   frame.rowconfigure(0,weight=1);frame.columnconfigure(1,weight=1)
+   def render():
+    table.delete(*table.get_children())
+-   for name,entry in entries.items():table.insert('','end',iid=name,values=[entry[k] or '未設定' for k in columns])
++   for name,entry in sorted_catalog(entries).items():table.insert('','end',iid=name,values=[entry[k] or '未設定' for k in columns])
+   render()
+   values=[tk.StringVar(win) for _ in columns]
+   for row,(label,value) in enumerate(zip(labels,values),1):
+@@ -191,7 +192,19 @@
+    except ValueError:preview.set('請輸入完整的螺旋槳資料。')
+   for value in values:value.trace_add('write',refresh)
+   refresh()
+-  ttk.Label(frame,textvariable=preview).grid(row=6,column=0,columnspan=2,sticky='w',pady=8)
++  name_row=ttk.Frame(frame)
++  name_row.grid(row=6,column=0,columnspan=2,sticky='ew',pady=8)
++  ttk.Label(name_row,textvariable=preview).pack(side='left',fill='x',expand=True)
++  def copy_name():
++   try:
++    entry=profile(*(v.get() for v in values))
++    if not entry['rotation']:raise ValueError('請選擇槳葉標示旋向。')
++   except ValueError as exc:
++    messagebox.showerror('無法複製名稱',str(exc),parent=win)
++    return
++   win.clipboard_clear()
++   win.clipboard_append(entry['name'])
++  ttk.Button(name_row,text='複製名稱',command=copy_name).pack(side='right',padx=(8,0))
+   def persist(updated):
+    nonlocal entries
+    try:save_catalog(root,updated)
+@@ -201,7 +214,7 @@
+    self.set_propellers(entries,self.propeller_name.get())
+    render()
+    return True
+-  def save():
++  def save(as_new=False):
+    try:
+     entry=profile(*(v.get() for v in values));name=entry['name']
+     if not entry['rotation']:raise ValueError('請選擇槳葉標示旋向。')
+@@ -210,7 +223,7 @@
+     messagebox.showerror('無法新增螺旋槳',str(exc),parent=win);return
+    legacy=next((key for key in entries if key.casefold()==name.rsplit('_',1)[0].casefold()),None)
+    updated=dict(entries)
+-   if legacy and not entries[legacy]['rotation']:
++   if legacy and not entries[legacy]['rotation'] and not as_new:
+     if not messagebox.askyesno('補登旋向',f'是否為舊項目 {legacy} 補登 {entry["rotation"]}？',parent=win):return
+     del updated[legacy]
+    else:legacy=None
+@@ -229,9 +242,13 @@
+    selected=table.selection()
+    if selected:
+     for key,value in zip(columns,values):value.set(entries[selected[0]][key])
++  table.bind('<<TreeviewSelect>>',copy_selected)
+   table.bind('<Double-1>',copy_selected)
+   ttk.Button(frame,text='刪除所選項目',command=delete).grid(row=7,column=0,sticky='w')
+-  ttk.Button(frame,text='儲存',command=save).grid(row=7,column=1,sticky='e')
++  actions=ttk.Frame(frame)
++  actions.grid(row=7,column=1,sticky='e')
++  ttk.Button(actions,text='另存新檔',command=lambda:save(as_new=True)).pack(side='left',padx=(0,8))
++  ttk.Button(actions,text='儲存',command=save).pack(side='left')
+ 
+  def begin(self):
+   if self.pending_tare:
+@@ -493,7 +510,7 @@
+   args=run_notice(self.busy,d.phase,d.remaining,d.ended,d.reason,self.report_state)
+   if args!=self.last_notice:
+    title,detail,bg,fg=args;self.notice.configure(bg=bg);self.notice_row.configure(bg=bg);self.notice_title.configure(text=title,bg=bg,fg=fg);self.notice_detail.configure(text=detail,bg=bg,fg=fg);self.last_notice=args
+-   self.root.title('Robi v0.3.26 · '+title+(f' {max(0,d.remaining):.0f}s' if self.busy and d.phase=='poststop' else ''))
++   self.root.title('Robi v0.3.27 · '+title+(f' {max(0,d.remaining):.0f}s' if self.busy and d.phase=='poststop' else ''))
+   key='poststop' if self.busy and d.phase=='poststop' else 'ended' if d.ended and not self.busy else 'active' if self.busy else 'idle'
+   if key!=self.last_notice_key:
+    if key=='poststop':
+--- v0.3.26/controller.py
++++ v0.3.27/controller.py
+@@ -305,7 +305,7 @@
+         folder=create_session_folder(c['folder'],self.mode,c['speeds'],c.get('run_name',''),label_override=label)
+         self.path=folder/'data.csv'
+         factors = direction_factors(c.get('mount'), (propeller or {}).get('rotation'))
+-        metadata=dict(self.cfg,mode=self.mode,version='0.3.26',direction_factors=factors,
++        metadata=dict(self.cfg,mode=self.mode,version='0.3.27',direction_factors=factors,
+             pid_board_readback=pid_readback,firmware_scale_config=getattr(self.motor,'scale_config',None),
+             conversion_gravity_m_s2=9.80665,firmware_identity='operator must verify; not read back',
+             note='simulation never opens physical sensor ports; measured channels kept separate')
+--- v0.3.26/propellers.py
++++ v0.3.27/propellers.py
+@@ -92,3 +92,15 @@
+     if reason == 'motor_fault' and re.fullmatch(r'0x[0-9a-fA-F]+', detail) and int(detail, 16):
+         return '_Error-' + detail
+     return '_Error-' + reason.replace('_', '-')
++
++
++def sorted_catalog(entries):
++    """Display order only; never rewrite stored identities or sample numbers."""
++    def natural(value):
++        return tuple((0, int(part)) if part.isdigit() else (1, part.casefold())
++                     for part in re.split(r'(\d+)', str(value)) if part)
++    def key(item):
++        name, row = item
++        return (natural(row['dimension']), int(row['blades']), natural(row['material']),
++                natural(row['number']), {'CW': 0, 'CCW': 1}.get(row['rotation'], 2), name)
++    return dict(sorted(entries.items(), key=key))
+--- v0.3.26/test_catalog_gui.py
++++ v0.3.27/test_catalog_gui.py
+@@ -0,0 +1,40 @@
++"""Real catalog window tests; no hardware ports."""
++import tempfile,tkinter as tk,unittest
++from pathlib import Path
++from types import SimpleNamespace
++from unittest.mock import Mock,patch
++from tkinter import ttk
++from app import App
++from propellers import profile,save_catalog,load_catalog
++
++class CatalogGuiTests(unittest.TestCase):
++ def test_select_save_as_copy_and_duplicate(self):
++  try:root=tk.Tk()
++  except tk.TclError as e:
++   if 'display' in str(e).lower():self.skipTest('No GUI display')
++   raise
++  self.addCleanup(root.destroy)
++  with tempfile.TemporaryDirectory() as temp:
++   base=Path(temp);row=profile('1050',3,'Black','00','CCW');save_catalog(base,{row['name']:row})
++   app=SimpleNamespace(root=root,busy=False,pending_begin=False,cfg={'folder':temp},propeller_name=tk.StringVar(root,row['name']),propeller_combo=Mock())
++   app.set_propellers=lambda entries,selected:App.set_propellers(app,entries,selected)
++   with patch('app.workspace_root',return_value=base):App.add_propeller(app)
++   root.update()
++   win=next(w for w in root.winfo_children() if isinstance(w,tk.Toplevel))
++   def all_widgets(w):
++    return [c for child in w.winfo_children() for c in [child,*all_widgets(child)]]
++   widgets=all_widgets(win);tree=next(w for w in widgets if isinstance(w,ttk.Treeview))
++   buttons={str(w.cget('text')):w for w in widgets if isinstance(w,ttk.Button)}
++   fields=[w for w in widgets if isinstance(w,ttk.Entry) and not isinstance(w,ttk.Combobox)]
++   rotation=next(w for w in widgets if isinstance(w,ttk.Combobox))
++   self.assertEqual(tuple(rotation.cget('values')),('CW','CCW'))
++   tree.selection_set(row['name']);root.update()
++   buttons['複製名稱'].invoke();self.assertEqual(root.clipboard_get(),row['name'])
++   fields[3].delete(0,'end');fields[3].insert(0,'01')
++   buttons['複製名稱'].invoke();self.assertEqual(root.clipboard_get(),'1050_3-Blade_Black_No01_CCW')
++   buttons['另存新檔'].invoke();root.update()
++   entries=load_catalog(base);self.assertEqual(len(entries),2);self.assertEqual(entries[row['name']],row)
++   tree.selection_set(row['name']);root.update()
++   with patch('app.messagebox.showerror') as error:
++    buttons['另存新檔'].invoke();error.assert_called_once()
++   self.assertEqual(load_catalog(base),entries)
+--- v0.3.26/test_catalog_sort.py
++++ v0.3.27/test_catalog_sort.py
+@@ -0,0 +1,15 @@
++import unittest
++from propellers import profile, sorted_catalog
++
++class CatalogSortTests(unittest.TestCase):
++ def test_numeric_order_pair_adjacency_and_no_mutation(self):
++  rows=[profile('1206',2,'PA6+40CF','00','CW'),profile('1050',3,'PA6+40CF','10','CW'),profile('1050',3,'PA6+40CF','2','CCW'),profile('1050',3,'PA6+40CF','2','CW')]
++  entries={r['name']:r for r in rows}
++  before=list(entries)
++  ordered=list(sorted_catalog(entries).values())
++  self.assertEqual([(x['dimension'],x['number'],x['rotation']) for x in ordered],[('1050','02','CW'),('1050','02','CCW'),('1050','10','CW'),('1206','00','CW')])
++  self.assertEqual(list(entries),before)
++ def test_text_codes_and_unknown_rotation_remain_supported(self):
++  rows=[profile(d,3,'Black','00',r) for d,r in [('A10',''),('A2','CCW'),('A2','CW'),('A2','')]]
++  ordered=list(sorted_catalog({x['name']:x for x in rows}).values())
++  self.assertEqual([(x['dimension'],x['rotation']) for x in ordered],[('A2','CW'),('A2','CCW'),('A2',''),('A10','')])

@@ -1,0 +1,30 @@
+test_disconnect_reconnect_rejects_old_generation (test_pid_transactions.TransactionTests.test_disconnect_reconnect_rejects_old_generation) ... ok
+test_each_stage_and_result_survives_refresh_view (test_pid_transactions.TransactionTests.test_each_stage_and_result_survives_refresh_view) ... ok
+test_error_from_old_request_does_not_clear_new (test_pid_transactions.TransactionTests.test_error_from_old_request_does_not_clear_new) ... ok
+test_old_reply_cannot_finish_new_pending_or_replace_values (test_pid_transactions.TransactionTests.test_old_reply_cannot_finish_new_pending_or_replace_values) ... ok
+test_read_in_flight_stop_late_reply_does_not_restore (test_pid_transactions.TransactionTests.test_read_in_flight_stop_late_reply_does_not_restore) ... ok
+test_safety_expected_readback_and_readonly (test_pid_transactions.TransactionTests.test_safety_expected_readback_and_readonly) ... ok
+test_single_flight_and_cancellation_release (test_pid_transactions.TransactionTests.test_single_flight_and_cancellation_release) ... ok
+test_stop_after_write_success_queued_is_conservative (test_pid_transactions.TransactionTests.test_stop_after_write_success_queued_is_conservative) ... ok
+test_stop_before_write_and_wrong_mode_or_recording (test_pid_transactions.TransactionTests.test_stop_before_write_and_wrong_mode_or_recording) ... ok
+test_success_already_queued_then_stop_rejects_old_result (test_pid_transactions.TransactionTests.test_success_already_queued_then_stop_rejects_old_result) ... ok
+test_unverified_blocks_experiment (test_pid_transactions.TransactionTests.test_unverified_blocks_experiment) ... ok
+test_write_exception_and_read_failure_release_pending (test_pid_transactions.TransactionTests.test_write_exception_and_read_failure_release_pending) ... ok
+test_write_sent_stop_unverified_persists_until_fresh_read (test_pid_transactions.TransactionTests.test_write_sent_stop_unverified_persists_until_fresh_read) ... ok
+test_cancel_invalid_and_running_never_submit (test_pid_dialog.DialogTests.test_cancel_invalid_and_running_never_submit) ... ok
+test_failure_clears_and_retains_reason (test_pid_dialog.DialogTests.test_failure_clears_and_retains_reason) ... ok
+test_read_updates_clean_preserves_dirty (test_pid_dialog.DialogTests.test_read_updates_clean_preserves_dirty) ... ok
+test_reopen_uses_shared_pending_and_drafts (test_pid_dialog.DialogTests.test_reopen_uses_shared_pending_and_drafts) ... ok
+test_single_write_stages_and_other_drafts_survive (test_pid_dialog.DialogTests.test_single_write_stages_and_other_drafts_survive) ... ok
+test_snapshot_changed_during_confirmation_rejects (test_pid_dialog.DialogTests.test_snapshot_changed_during_confirmation_rejects) ... ok
+test_step_does_not_send_and_respects_limits (test_pid_dialog.DialogTests.test_step_does_not_send_and_respects_limits) ... ok
+test_unsafe_state_and_mismatch (test_pid_settings.PidTests.test_unsafe_state_and_mismatch) ... ok
+test_wire_format_for_signed_observer_and_divisors (test_pid_settings.PidTests.test_wire_format_for_signed_observer_and_divisors) ... ok
+test_destroy_reopen_inflight_and_late_stop_reply (test_pid_gui.PidGuiTests.test_destroy_reopen_inflight_and_late_stop_reply) ... skipped 'No GUI display: no display name and no $DISPLAY environment variable'
+test_success_and_failure_labels_persist_after_refresh (test_pid_gui.PidGuiTests.test_success_and_failure_labels_persist_after_refresh) ... skipped 'No GUI display: no display name and no $DISPLAY environment variable'
+test_tabs_stringvars_inputs_buttons_and_readonly (test_pid_gui.PidGuiTests.test_tabs_stringvars_inputs_buttons_and_readonly) ... skipped 'No GUI display: no display name and no $DISPLAY environment variable'
+
+----------------------------------------------------------------------
+Ran 25 tests in 0.058s
+
+OK (skipped=3)

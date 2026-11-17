@@ -1,0 +1,646 @@
+--- v0.3.25/CHANGELOG.md
++++ v0.3.26/CHANGELOG.md
+@@ -1,3 +1,7 @@
++# v0.3.26 — 部分採納 review-A 與 PID 分頁樣式
++
++reserve 原子輸入驗證、實驗資格方法、共用訊息優先序、單次 available 快照及寫入前置檢查整理。修正摘要完成事件等待與競爭測試例外回報。分頁選取改白底粗體底線、未選取淺灰；未重排內容。詳 RELEASE_v0.3.26.md。下方保留歷史紀錄。
++
+ # v0.3.25 — PID／實驗互斥、STOP 斷線意圖與提示持續性
+ 
+ 修正 Controller.begin／App.begin 與開始按鈕的 pending／unverified／blocked 防護，確認後重查，原子互斥資格不跨硬體 I/O 持鎖。STOP 保留 disconnect 意圖並回報其他取消命令；提示採共享優先序，不被 refresh 洗掉。新增 12 項測試方法。更正 v0.3.24 防護範圍敘述；完整結果見 RELEASE_v0.3.25.md。以下為歷史紀錄。
+--- v0.3.25/HANDOVER_STATUS.md
++++ v0.3.26/HANDOVER_STATUS.md
+@@ -1,11 +1,11 @@
+ # Robi 專案交接狀態與後續工作基準
+ 
+-- 更新日期：2026-11-05（Asia/Taipei）。
+-- 最新程式交付：Robi Integrated Automation v0.3.25；以實際 v0.3.24 原始碼為修改基準。
+-- 本次已修改 Python 並完成離線重現、測試與打包：PID／實驗互斥、STOP 保留斷線意圖、提示持續性。沒有連接硬體，沒有修改韌體、通訊、換算、實驗階段或原始量測。
+-- 最終測試 107 項：103 通過、0 失敗／錯誤、4 GUI 跳過；Windows GUI／DPI、PID／PLL 實機及 48 V 韌體修改／編譯／燒錄仍未完成。
+-- 第 1–14 節保留 v0.3.22 歷史交接與資料盤點，第 15、16 節為 v0.3.23／v0.3.24 歷史；目前修正與驗證見第 17 節。歷史「不修改程式」指當時盤點，不代表本次工作。
+-- EXPERIMENT_INDEX 與原始實驗包未修改：歷史索引 49 筆資料夾、17 組唯一測次；文件盤點完成不代表實機驗收。
++- 更新日期：2026-11-06（Asia/Taipei）。目前正式交付：**Robi v0.3.26**，以正式 .25 為基準部分採納 review-A；保留 .25 ZIP 供回復。
++- 本次已完成 Python 修改、離線測試與打包：reserve 輸入原子驗證、實驗資格方法、訊息優先序、單次快照、寫入前置檢查整理、測試同步與 PID 分頁樣式。未操作硬體，未修改通訊／換算／實驗階段／原始量測／韌體。
++- 最終回歸 116 項：111 通過、0 失敗／錯誤、5 GUI 跳過。首次完整回歸 1 方法內 2 個子案例錯誤及修正原因、另行 RuntimeError 注入失敗證據均保留，詳第 18 節。
++- Windows GUI／DPI（含分頁實際視覺）、PID／PLL 實機驗證、48 V 韌體修改／編譯／燒錄仍未完成。
++- 第 1–14 節為 .22 歷史交接；第 15–17 節為 .23–.25 歷史開發。第 18 節為目前 .26 基準。歷史「本次」僅指當時工作。
++- EXPERIMENT_INDEX／原始實驗包未變：49 筆資料夾、17 組唯一測次。沒有新增硬體驗證結果。
+ 
+ ## 1. 證據與讀取範圍
+ 
+@@ -404,7 +404,7 @@
+ 回復：關閉 v0.3.24 後啟動保留的 v0.3.23；軟體回復不會回滾已寫入板端的參數，須重新讀取確認。後續等待使用者提供實測結果或下一項需求。
+ 
+ 
+-## 17. 2026-11-05 v0.3.25 最小範圍修正（目前基準）
++## 17. 2026-11-05 v0.3.25 最小範圍修正（歷史基準）
+ 
+ ## 修正與重現證據
+ 
+@@ -452,3 +452,49 @@
+ - 回復時使用原 Robi_Integrated_Automation_v0.3.24.zip 於獨立目錄；本次未讀寫原始量測。不建議在尚有背景工作／開啟紀錄時切換程式。
+ 
+ 離線測試驗證的是軟體狀態與控制流程，不是硬體驗收。
++
++
++## 18. 2026-11-06 v0.3.26 部分採納及驗證（目前基準）
++
++## 相對正式 .25 的最小修改
++
++| 位置 | 修改及邊界 |
++|---|---|
++| pid_transactions.py：reserve | 保持忙碌檢查先行；確認 update 結構、已知 key、expected 為整數、新值範圍／合法 divisor／唯讀限制，並先完成描述，才變更 sequence、active、提示與列狀態。非法輸入統一 ValueError，不留下 pending、不破壞既有交易。接受 list 後轉成 tuple，避免呼叫者後續修改交易內容。沒有修改 encode_value 或通訊編碼 |
++| pid_transactions.py／controller.py | reserve_experiment 與 PID reserve 使用同一 RLock；Controller 在自己的連線／STOP 檢查後、仍持有同一鎖時取得資格。release_experiment 只清 experiment，完全不清 unverified；建立失敗、finish、斷線及強制關檔的原有釋放位置不變。不是 token 或完整所有權管理 |
++| pid_transactions.py／pid_dialog.py | _message_is_protected 集中重要訊息判斷；available 同一次判斷只取得一次 view。accept／invalidate 的成功、失敗、草稿、列結果及 unverified 規則不變；未引入隱藏解除 unverified 的數值 helper |
++| controller.py：_check_pid_write | 僅抽出編碼、無故障 IDLE／0 rpm、板端 expected 舊值檢查。主要流程仍依序顯示有效性檢查、前置檢查、標記可能送出、寫入、讀回核對、終態及稽核發布。未採納 _publish_pid_result。狀態鎖不涵蓋設備 I/O |
++| pid_dialog.py：_styles | 選取頁為白底、深色粗體、底部色線；未選取頁為淺灰底、灰字。使用同尺寸 tab surface 與相同 padding，移除原未選取凸起外框；圖像留在 root，避免關窗後樣式引用失效。保留兩頁位置、名稱、內容與切換邏輯，未調整其他區域布局 |
++| test_v03.py | 原摘要檔斷言改為等待該測次 data.csv 路徑的 finished 事件。等待有整體期限與明確逾時失敗，不加 sleep，不修改正式 finish 語意。finished 表示同步摘要流程已走完；非同步 data_report.html 仍由 report_ready／report_error 表示，不混為同一完成事件 |
++| test_pid_refinements.py | 新增 8 項測試方法，含多個輸入 subTest、既有交易保護、競爭資格、RuntimeError 注入檢測、釋放不解除未確認、完成事件路徑及逾時、available 單次快照。競爭以 Barrier 同步，Queue 收齊兩個結果；非預期例外回主測試失敗，join 有限等待並檢查存活狀態；確認一方成功、一方因明確互斥原因遭拒 |
++| test_pid_transactions.py／test_pid_gui.py | 既有安全測試改為確認非法 divisor／唯讀操作在入口直接拒絕且無 I/O。新增真實 PidDialog 分頁樣式／初始頁／切換內容／關窗重開測試，無 display 時明確跳過 |
++| app.py／controller.py／文件 | 視窗與 metadata 版本更新為 0.3.26；CHANGELOG、VALIDATION、README、HANDOVER 更新目前摘要並保留歷史 |
++
++## 測試歷程：保留首次失敗
++
++1. **修改前紅燈測試**：在 .26 工作副本仍與正式 .25 執行程式相同時，先執行新增的前 6 個測試方法。1 方法通過，其餘 5 方法不通過；unittest 計入子案例後為 `failures=9, errors=9`。包含尚無 reserve_experiment API 的預期錯誤，以及缺少輸入原子驗證／list 隔離；不能把這 18 筆輸出稱為 18 個現場缺陷。原始輸出：validation/v026/before.txt。
++2. **核心修改後目標測試**：先 6 項全過，補齊事件同步與單次快照測試後，8 項全過。原始輸出 targeted.txt、targeted_final.txt。
++3. **第一次完整回歸**：116 個方法；110 通過、1 方法內 2 個子案例錯誤、5 GUI 跳過。兩個錯誤均在 test_safety_expected_readback_and_readonly：舊測試期待背景回覆拒絕，但新入口已直接拒絕唯讀參數及非法 divisor。這是本次驗證時機前移造成的測試期待不一致，已更新為 assertRaises 並增加無 sample／read／write／排隊的斷言；不是忽略例外。原始輸出 full_round1.txt。
++4. **最終完整回歸**：`python3 -m unittest discover -s Robi_Integrated_Automation_v0.3.26 -v`；**116 項，111 通過、0 失敗／錯誤、5 跳過，32.646 秒**。原始輸出 full_final.txt。
++5. **另行測試驗證用注入**：將 reserve_experiment 注入 RuntimeError，直接執行競爭測試，unittest 得到 **1 項刻意失敗、0 錯誤、0 跳過**，主測試訊息包含工作名稱與 RuntimeError。外層檢查確認此失敗符合預期；不計為正常回歸故障，也不冒稱競爭正常通過。原始輸出 injected_failure.txt。正常回歸另有一項 test-of-test 斷言上述注入必須被抓出。
++
++本次涵蓋：非法輸入後恢復、既有交易不受損、資格競爭、建立失敗釋放、寫入後 STOP、disconnect／STOP 交錯、unverified 保留、舊回覆拒收、草稿及提示保留。沿用的 test_pid_interlocks 仍使用真實 Controller.run／commands／events 與替代設備；沒有開啟實體埠。新競爭測試所有工作執行緒有限等待並 join；未新增任意 sleep。
++
++## GUI 與實機限制
++
++5 項跳過為：主畫面 GUI 1 項、PidDialog GUI 4 項（含本次新增分頁樣式測試），環境無 DISPLAY，也未找到 Xvfb。已加入的 GUI 測試會檢查初始 Currents / Speed、切換至 Observer / PLL 再切回、實際顯示內容、選取色彩／粗體／底線圖像、相同請求高度及關窗重開；**本環境沒有執行成功，不能宣稱視覺驗收完成**。Tcl StringVar／mock presenter 通過不代表真正 Tk 視窗通過。
++
++Windows GUI／DPI（包含分頁實際選取視覺）、PID／PLL 實機驗證，以及 48 V 韌體修改／編譯／燒錄仍未完成。需在 Windows 實際開啟初始頁、往返切換、關窗重開，確認樣式與內容一致及不同 DPI 無裁切；硬體驗收另行安排。
++
++## 非範圍差異核對
++
++- protocol.py、pid_settings.py、units.py、calibration.py、config.py、sensors.py、devices.py、report.py、summarize.py、theme.py、session_files.py 與正式 .25 位元組一致。其餘未列為修改的執行模組與設定／啟動檔亦維持原樣。
++- Controller.advance／next_stage／halt／enter_post／submit／service_disconnect／clear_stopped_commands AST 相同；沒有變更實驗階段或 STOP／斷線語意。
++- PidDialog.__init__／_group／_draft_changed／result／refresh／write AST 相同；只修改分頁樣式與 available 的快照使用，不改內容、位置或切換邏輯。
++- PidTransactions.accept／invalidate AST 相同；unverified 的解除位置、列結果及草稿規則未改。
++- 全部 Python 通過語法解析。原正式 .25 ZIP 與檔案逐一核對無修改；測試只使用暫存測次，未覆寫原始量測。
++- from_v025.patch 是相對正式 .25 的根目錄 Python／Markdown 完整文字差異（含新增測試與文件）；validation/source_manifest.json 記錄異動清單與 Python SHA-256。歷史驗證資料保留歷史版本標記，勿以舊結果作本版驗收。
++
++## 後續基準
++
++目前正式交付基準為 .26，原 .25 ZIP 保留供回復；review-A 沒有升格為正式版。尚未建立新的硬體驗證結論。離線測試全過不等於硬體驗收完成。
+--- v0.3.25/README_先看這裡.md
++++ v0.3.26/README_先看這裡.md
+@@ -1,4 +1,8 @@
+-# 目前版本 v0.3.25
++# 目前版本 v0.3.26
++
++以正式 .25 部分採納 review-A；輸入驗證、資格管理、測試同步與 PID 分頁樣式調整。先讀 RELEASE_v0.3.26.md。分頁實際視覺與 Windows GUI／DPI、PID／PLL 實機、48 V 韌體仍未完成驗證／實作。原 .25 ZIP 保留供回復。
++
++# v0.3.25 歷史說明
+ 
+ 本版修正 PID 與實驗啟動互斥、STOP 與斷線交錯、操作提示持續性；既有介面版面不變。先看 RELEASE_v0.3.25.md 的操作狀態與驗證限制。原 v0.3.24 ZIP 保留可回復。Windows GUI／DPI、PID／PLL 實機驗證與 48 V 韌體仍未完成。下方為歷史使用說明；並不表示舊版測試已涵蓋本版實機。
+ 
+--- /dev/null
++++ v0.3.26/RELEASE_v0.3.26.md
+@@ -0,0 +1,46 @@
++# Robi v0.3.26 發布說明與驗證紀錄
++
++日期：2026-11-06（Asia/Taipei）。基準是正式 Robi v0.3.25；review-A 僅作部分設計參考，未整包替換。正式 .25 原始碼與 ZIP 保留不動。本次未操作硬體，未修改／編譯／燒錄韌體。
++
++## 相對正式 .25 的最小修改
++
++| 位置 | 修改及邊界 |
++|---|---|
++| pid_transactions.py：reserve | 保持忙碌檢查先行；確認 update 結構、已知 key、expected 為整數、新值範圍／合法 divisor／唯讀限制，並先完成描述，才變更 sequence、active、提示與列狀態。非法輸入統一 ValueError，不留下 pending、不破壞既有交易。接受 list 後轉成 tuple，避免呼叫者後續修改交易內容。沒有修改 encode_value 或通訊編碼 |
++| pid_transactions.py／controller.py | reserve_experiment 與 PID reserve 使用同一 RLock；Controller 在自己的連線／STOP 檢查後、仍持有同一鎖時取得資格。release_experiment 只清 experiment，完全不清 unverified；建立失敗、finish、斷線及強制關檔的原有釋放位置不變。不是 token 或完整所有權管理 |
++| pid_transactions.py／pid_dialog.py | _message_is_protected 集中重要訊息判斷；available 同一次判斷只取得一次 view。accept／invalidate 的成功、失敗、草稿、列結果及 unverified 規則不變；未引入隱藏解除 unverified 的數值 helper |
++| controller.py：_check_pid_write | 僅抽出編碼、無故障 IDLE／0 rpm、板端 expected 舊值檢查。主要流程仍依序顯示有效性檢查、前置檢查、標記可能送出、寫入、讀回核對、終態及稽核發布。未採納 _publish_pid_result。狀態鎖不涵蓋設備 I/O |
++| pid_dialog.py：_styles | 選取頁為白底、深色粗體、底部色線；未選取頁為淺灰底、灰字。使用同尺寸 tab surface 與相同 padding，移除原未選取凸起外框；圖像留在 root，避免關窗後樣式引用失效。保留兩頁位置、名稱、內容與切換邏輯，未調整其他區域布局 |
++| test_v03.py | 原摘要檔斷言改為等待該測次 data.csv 路徑的 finished 事件。等待有整體期限與明確逾時失敗，不加 sleep，不修改正式 finish 語意。finished 表示同步摘要流程已走完；非同步 data_report.html 仍由 report_ready／report_error 表示，不混為同一完成事件 |
++| test_pid_refinements.py | 新增 8 項測試方法，含多個輸入 subTest、既有交易保護、競爭資格、RuntimeError 注入檢測、釋放不解除未確認、完成事件路徑及逾時、available 單次快照。競爭以 Barrier 同步，Queue 收齊兩個結果；非預期例外回主測試失敗，join 有限等待並檢查存活狀態；確認一方成功、一方因明確互斥原因遭拒 |
++| test_pid_transactions.py／test_pid_gui.py | 既有安全測試改為確認非法 divisor／唯讀操作在入口直接拒絕且無 I/O。新增真實 PidDialog 分頁樣式／初始頁／切換內容／關窗重開測試，無 display 時明確跳過 |
++| app.py／controller.py／文件 | 視窗與 metadata 版本更新為 0.3.26；CHANGELOG、VALIDATION、README、HANDOVER 更新目前摘要並保留歷史 |
++
++## 測試歷程：保留首次失敗
++
++1. **修改前紅燈測試**：在 .26 工作副本仍與正式 .25 執行程式相同時，先執行新增的前 6 個測試方法。1 方法通過，其餘 5 方法不通過；unittest 計入子案例後為 `failures=9, errors=9`。包含尚無 reserve_experiment API 的預期錯誤，以及缺少輸入原子驗證／list 隔離；不能把這 18 筆輸出稱為 18 個現場缺陷。原始輸出：validation/v026/before.txt。
++2. **核心修改後目標測試**：先 6 項全過，補齊事件同步與單次快照測試後，8 項全過。原始輸出 targeted.txt、targeted_final.txt。
++3. **第一次完整回歸**：116 個方法；110 通過、1 方法內 2 個子案例錯誤、5 GUI 跳過。兩個錯誤均在 test_safety_expected_readback_and_readonly：舊測試期待背景回覆拒絕，但新入口已直接拒絕唯讀參數及非法 divisor。這是本次驗證時機前移造成的測試期待不一致，已更新為 assertRaises 並增加無 sample／read／write／排隊的斷言；不是忽略例外。原始輸出 full_round1.txt。
++4. **最終完整回歸**：`python3 -m unittest discover -s Robi_Integrated_Automation_v0.3.26 -v`；**116 項，111 通過、0 失敗／錯誤、5 跳過，32.646 秒**。原始輸出 full_final.txt。
++5. **另行測試驗證用注入**：將 reserve_experiment 注入 RuntimeError，直接執行競爭測試，unittest 得到 **1 項刻意失敗、0 錯誤、0 跳過**，主測試訊息包含工作名稱與 RuntimeError。外層檢查確認此失敗符合預期；不計為正常回歸故障，也不冒稱競爭正常通過。原始輸出 injected_failure.txt。正常回歸另有一項 test-of-test 斷言上述注入必須被抓出。
++
++本次涵蓋：非法輸入後恢復、既有交易不受損、資格競爭、建立失敗釋放、寫入後 STOP、disconnect／STOP 交錯、unverified 保留、舊回覆拒收、草稿及提示保留。沿用的 test_pid_interlocks 仍使用真實 Controller.run／commands／events 與替代設備；沒有開啟實體埠。新競爭測試所有工作執行緒有限等待並 join；未新增任意 sleep。
++
++## GUI 與實機限制
++
++5 項跳過為：主畫面 GUI 1 項、PidDialog GUI 4 項（含本次新增分頁樣式測試），環境無 DISPLAY，也未找到 Xvfb。已加入的 GUI 測試會檢查初始 Currents / Speed、切換至 Observer / PLL 再切回、實際顯示內容、選取色彩／粗體／底線圖像、相同請求高度及關窗重開；**本環境沒有執行成功，不能宣稱視覺驗收完成**。Tcl StringVar／mock presenter 通過不代表真正 Tk 視窗通過。
++
++Windows GUI／DPI（包含分頁實際選取視覺）、PID／PLL 實機驗證，以及 48 V 韌體修改／編譯／燒錄仍未完成。需在 Windows 實際開啟初始頁、往返切換、關窗重開，確認樣式與內容一致及不同 DPI 無裁切；硬體驗收另行安排。
++
++## 非範圍差異核對
++
++- protocol.py、pid_settings.py、units.py、calibration.py、config.py、sensors.py、devices.py、report.py、summarize.py、theme.py、session_files.py 與正式 .25 位元組一致。其餘未列為修改的執行模組與設定／啟動檔亦維持原樣。
++- Controller.advance／next_stage／halt／enter_post／submit／service_disconnect／clear_stopped_commands AST 相同；沒有變更實驗階段或 STOP／斷線語意。
++- PidDialog.__init__／_group／_draft_changed／result／refresh／write AST 相同；只修改分頁樣式與 available 的快照使用，不改內容、位置或切換邏輯。
++- PidTransactions.accept／invalidate AST 相同；unverified 的解除位置、列結果及草稿規則未改。
++- 全部 Python 通過語法解析。原正式 .25 ZIP 與檔案逐一核對無修改；測試只使用暫存測次，未覆寫原始量測。
++- from_v025.patch 是相對正式 .25 的根目錄 Python／Markdown 完整文字差異（含新增測試與文件）；validation/source_manifest.json 記錄異動清單與 Python SHA-256。歷史驗證資料保留歷史版本標記，勿以舊結果作本版驗收。
++
++## 後續基準
++
++目前正式交付基準為 .26，原 .25 ZIP 保留供回復；review-A 沒有升格為正式版。尚未建立新的硬體驗證結論。離線測試全過不等於硬體驗收完成。
+--- v0.3.25/VALIDATION.md
++++ v0.3.26/VALIDATION.md
+@@ -1,3 +1,7 @@
++# v0.3.26 — 目前驗證
++
++最終 116 項：111 通過、0 失敗／錯誤、5 GUI 跳過。第一輪 116 項有 1 方法內 2 個子案例錯誤，為入口驗證前移造成的舊期待，已修正並保留 log。另行 RuntimeError 注入刻意造成 1 項失敗，證明測試可偵測非預期例外；不混入正常回歸。詳 RELEASE_v0.3.26.md 與 validation/v026。Windows GUI／DPI、分頁實際視覺、PID／PLL 實機、48 V 韌體均待驗證／完成。下方為歷史結果。
++
+ # v0.3.25 — 2026-11-05 最終驗證
+ 
+ 完整測試 107 項：103 通過、0 失敗／錯誤、4 GUI 跳過（無 DISPLAY）。相同重現腳本在 v0.3.24 為 4 失敗，在 v0.3.25 為 4 通過。見 validation/final_suite.txt、reproduction_v024.txt、reproduction_v025.txt 及 RELEASE_v0.3.25.md；中間錯誤與未完成輸出另列發布說明，不當作通過。
+--- v0.3.25/app.py
++++ v0.3.26/app.py
+@@ -30,12 +30,12 @@
+  def __init__(self,root):
+   self.root=root;self.worker=Controller();self.connected=False;self.connecting=False;self.busy=False;self.pending_begin=False;self.pending_tare=False;self.motor_stopped=False
+   self.cfg=defaults();self.values={};self.force_state='stopped';self.last_callback_error=None;self.history=[];self.dialogs=[];self.latest_output_dir=None;self.report_state='';self.last_notice=None;self.last_notice_key=None
+-  root.title('Robi v0.3.25 · 實驗監看');root.geometry('1180x790');root.minsize(1040,700)
++  root.title('Robi v0.3.26 · 實驗監看');root.geometry('1180x790');root.minsize(1040,700)
+   style=apply_theme(root)
+   outer=ttk.Frame(root,padding=(14,10));self.outer=outer;outer.pack(fill='both',expand=True)
+   heading=ttk.Frame(outer);heading.pack(fill='x',pady=(0,8))
+   ttk.Label(heading,text='Robi',font=('Segoe UI',20,'bold'),foreground='#17212f').pack(side='left')
+-  ttk.Label(heading,text='  馬達實驗工作台  /  v0.3.25',foreground='#788392').pack(side='left')
++  ttk.Label(heading,text='  馬達實驗工作台  /  v0.3.26',foreground='#788392').pack(side='left')
+   self.sim=tk.BooleanVar(value=True)
+   self.simbtn=PillButton(heading,text='實機鎖定（僅模擬）',command=self.toggle_mode,role='mode_locked',width=230,height=40);self.simbtn.pack(side='right')
+   workspace=ttk.Frame(outer);workspace.pack(fill='both',expand=True)
+@@ -493,7 +493,7 @@
+   args=run_notice(self.busy,d.phase,d.remaining,d.ended,d.reason,self.report_state)
+   if args!=self.last_notice:
+    title,detail,bg,fg=args;self.notice.configure(bg=bg);self.notice_row.configure(bg=bg);self.notice_title.configure(text=title,bg=bg,fg=fg);self.notice_detail.configure(text=detail,bg=bg,fg=fg);self.last_notice=args
+-   self.root.title('Robi v0.3.25 · '+title+(f' {max(0,d.remaining):.0f}s' if self.busy and d.phase=='poststop' else ''))
++   self.root.title('Robi v0.3.26 · '+title+(f' {max(0,d.remaining):.0f}s' if self.busy and d.phase=='poststop' else ''))
+   key='poststop' if self.busy and d.phase=='poststop' else 'ended' if d.ended and not self.busy else 'active' if self.busy else 'idle'
+   if key!=self.last_notice_key:
+    if key=='poststop':
+--- v0.3.25/controller.py
++++ v0.3.26/controller.py
+@@ -208,6 +208,16 @@
+         self.apply_force(dict(self.force_cfg, **{f'zero{channel}': zero}))
+         self.emit('force_tared', (channel, zero))
+ 
++    def _check_pid_write(self, update):
++        key, expected, value = update
++        encode_value(key, value)
++        sample = self.motor.sample()
++        if sample['state'] != 0 or sample['rpm'] != 0 or sample['faults']:
++            raise ValueError('寫入需要無故障 IDLE 且回授為 0 rpm。')
++        before = self.motor.read_pid()
++        if before[key] != expected:
++            raise ValueError('板端數值已變更，請重新讀取。')
++
+     def pid_command(self, request):
+         update = request['update']
+         sent = False
+@@ -222,13 +232,7 @@
+                 raise ValueError('請先連線實機，並結束實驗。')
+             if update is not None:
+                 key, expected, value = update
+-                encode_value(key, value)
+-                sample = self.motor.sample()
+-                if sample['state'] != 0 or sample['rpm'] != 0 or sample['faults']:
+-                    raise ValueError('寫入需要無故障 IDLE 且回授為 0 rpm。')
+-                before = self.motor.read_pid()
+-                if before[key] != expected:
+-                    raise ValueError('板端數值已變更，請重新讀取。')
++                self._check_pid_write(update)
+                 with self.pid.lock:
+                     valid()
+                     self.pid.mark_sent(request)
+@@ -256,14 +260,12 @@
+             reason = self.start_block_reason()
+             if reason:
+                 raise ValueError(reason)
+-            self.pid.experiment = True
+-            generation = self.pid.generation
++            generation = self.pid.reserve_experiment()
+         try:
+             self._begin(c, generation)
+         finally:
+             if not self.file:
+-                with self.pid.lock:
+-                    self.pid.experiment = False
++                self.pid.release_experiment()
+ 
+     def _begin(self, c, generation):
+         validate_plan(c)
+@@ -303,7 +305,7 @@
+         folder=create_session_folder(c['folder'],self.mode,c['speeds'],c.get('run_name',''),label_override=label)
+         self.path=folder/'data.csv'
+         factors = direction_factors(c.get('mount'), (propeller or {}).get('rotation'))
+-        metadata=dict(self.cfg,mode=self.mode,version='0.3.25',direction_factors=factors,
++        metadata=dict(self.cfg,mode=self.mode,version='0.3.26',direction_factors=factors,
+             pid_board_readback=pid_readback,firmware_scale_config=getattr(self.motor,'scale_config',None),
+             conversion_gravity_m_s2=9.80665,firmware_identity='operator must verify; not read back',
+             note='simulation never opens physical sensor ports; measured channels kept separate')
+@@ -384,8 +386,7 @@
+         self.drain();self.event('session_end',self.reason)
+         self.file.close()
+         self.file = None
+-        with self.pid.lock:
+-            self.pid.experiment = False
++        self.pid.release_experiment()
+         self.workers = [w for w in self.workers if w.is_alive()]
+         self.phase = 'idle' if self.motor else 'disconnected'
+         propeller=self.cfg.get('propeller')
+@@ -441,7 +442,7 @@
+             with self.pid.lock:
+                 self.disconnect_requested = False
+                 # The transition has completed, not a forced PID unlock.
+-                self.pid.experiment = False
++                self.pid.release_experiment()
+                 self.cancel_pid('馬達已斷線', blocked=False)
+             self.emit('connected', False)
+ 
+@@ -590,7 +591,7 @@
+                         except Exception:pass
+                         self.file = None
+                         with self.pid.lock:
+-                            self.pid.experiment = False
++                            self.pid.release_experiment()
+                         self.phase = 'idle' if self.motor else 'disconnected'
+                 else:self.phase='idle' if self.motor else 'disconnected'
+             self.quit_event.wait(.1) if not self.quit_event.is_set() else time.sleep(.1)
+--- v0.3.25/pid_dialog.py
++++ v0.3.26/pid_dialog.py
+@@ -71,9 +71,29 @@
+         style.configure('Pid.Value.TLabel', font=('Consolas', 12), foreground='#24374b')
+         style.configure('Pid.Muted.TLabel', foreground='#687b8c')
+         style.configure('Pid.Status.TLabel', foreground='#17698d')
+-        style.configure('Pid.TNotebook.Tab', padding=(24, 9))
+-        style.map('Pid.TNotebook.Tab', background=[('selected', '#40b9df')],
+-                  foreground=[('selected', '#ffffff')])
++        # Use one fixed-size surface for both states: no raised inactive border.
++        # Images live on the root so closing/reopening a dialog keeps the style valid.
++        root = self.app.root
++        if not hasattr(root, '_pid_tab_images'):
++            inactive = tk.PhotoImage(master=root, width=8, height=8)
++            inactive.put('#eef1f4', to=(0, 0, 8, 8))
++            selected = tk.PhotoImage(master=root, width=8, height=8)
++            selected.put('#ffffff', to=(0, 0, 8, 8))
++            selected.put('#17698d', to=(0, 6, 8, 8))
++            root._pid_tab_images = (inactive, selected)
++            style.element_create('Pid.Tab.surface', 'image', inactive,
++                                 ('selected', selected), border=(0, 0, 0, 2), sticky='nswe')
++        style.layout('Pid.TNotebook.Tab', [
++            ('Pid.Tab.surface', {'sticky': 'nswe', 'children': [
++                ('Notebook.padding', {'sticky': 'nswe', 'children': [
++                    ('Notebook.label', {'sticky': ''})]})]})])
++        style.configure('Pid.TNotebook', background='#ffffff', borderwidth=0)
++        style.configure('Pid.TNotebook.Tab', padding=(24, 9),
++                        font=('Microsoft JhengHei UI', 10), foreground='#687b8c')
++        style.map('Pid.TNotebook.Tab',
++                  foreground=[('selected', '#24374b'), ('!selected', '#687b8c')],
++                  font=[('selected', ('Microsoft JhengHei UI', 10, 'bold')),
++                        ('!selected', ('Microsoft JhengHei UI', 10))])
+         style.configure('Pid.Action.TButton', padding=(10, 5), foreground='#17698d')
+         style.configure('Pid.Step.TButton', padding=(5, 3), foreground='#17698d')
+ 
+@@ -111,8 +131,15 @@
+             self.drafts[key].trace_add('write', lambda *_, k=key: self._draft_changed(k))
+ 
+     def available(self):
+-        a = self.app
+-        return a.connected and not a.sim.get() and not (a.busy or a.pending_begin or self.pending or self.transaction.view()['blocked'] or a.worker.stop_event.is_set() or self.transaction.view()['experiment'])
++        app = self.app
++        state = self.transaction.view()
++        application_busy = app.busy or app.pending_begin
++        transaction_busy = state['pending'] or state['blocked'] or state['experiment']
++        return (
++            app.connected and not app.sim.get()
++            and not application_busy and not transaction_busy
++            and not app.worker.stop_event.is_set()
++        )
+ 
+     def _draft_changed(self, key):
+         if not self._syncing:self.transaction.edit(key, self.drafts[key].get())
+--- v0.3.25/pid_transactions.py
++++ v0.3.26/pid_transactions.py
+@@ -1,6 +1,6 @@
+ """PID transaction state shared by the controller and UI; no hardware I/O here."""
+ from threading import RLock
+-from pid_settings import PARAMETERS
++from pid_settings import PARAMETERS, encode_value
+ 
+ class PidTransactions:
+     def __init__(self):
+@@ -28,14 +28,27 @@
+         with self.lock:
+             if self.active or self.blocked or self.experiment:
+                 raise ValueError('PID 交易、實驗或連線轉換尚未完成。')
++            # Validate before any state mutation: rejected input must not strand
++            # pending or erase a previous result. Freeze caller-owned lists too.
++            if update is not None:
++                if not isinstance(update, (tuple, list)) or len(update) != 3:
++                    raise ValueError('寫入請求須包含參數、舊值與新值。')
++                key, expected, value = update
++                if not isinstance(key, str) or key not in PARAMETERS:
++                    raise ValueError('未知的 PID 參數。')
++                if type(expected) is not int:
++                    raise ValueError('expected 舊值須為整數。')
++                encode_value(key, value)
++                update = (key, expected, value)
++            request = dict(id=self.sequence + 1, generation=self.generation, update=update)
++            description = self.describe(request)
+             self.hint = ''
+             self.important = False
+             self.sequence += 1
+-            request = dict(id=self.sequence, generation=self.generation, update=update)
+             self.active = dict(request, sent=False)
+             if update:
+                 self.rows[update[0]] = '寫入中'
+-            self.status = self.describe(request) + '：已排入交易。'
++            self.status = description + '：已排入交易。'
+             return request
+ 
+     @staticmethod
+@@ -106,17 +119,22 @@
+             self.revision += 1
+             return True
+ 
++    def _message_is_protected(self):
++        # Internal callers hold lock; input hints must not hide safety/results.
++        return bool(self.important or self.unverified or self.active)
++
+     def view(self):
+         with self.lock:
+-            return dict(values=dict(self.values), drafts=dict(self.drafts), rows=dict(self.rows),
+-                        pending=bool(self.active), status=self.status if self.important or self.unverified or self.active else (self.hint or self.status), revision=self.revision,
+-                        experiment=self.experiment,
+-                        blocked=self.blocked, unverified=self.unverified)
++            message = self.status if self._message_is_protected() else (self.hint or self.status)
++            return dict(
++                values=dict(self.values), drafts=dict(self.drafts), rows=dict(self.rows),
++                pending=bool(self.active), status=message, revision=self.revision,
++                experiment=self.experiment, blocked=self.blocked, unverified=self.unverified,
++            )
+ 
+     def operation_hint(self, text):
+         with self.lock:
+-            # Safety/transaction messages outrank local input hints.
+-            if not (self.important or self.unverified or self.active):
++            if not self._message_is_protected():
+                 self.hint = text
+ 
+     def clear_hint(self):
+@@ -135,6 +153,20 @@
+                 return '實驗已取得執行資格，請等待上一輪結束。'
+             return ''
+ 
++    def reserve_experiment(self):
++        """Reserve under the PID lock; Controller remains the lifecycle owner."""
++        with self.lock:
++            reason = self.start_reason()
++            if reason:
++                raise ValueError(reason)
++            self.experiment = True
++            return self.generation
++
++    def release_experiment(self):
++        """Release experiment eligibility only, never write uncertainty."""
++        with self.lock:
++            self.experiment = False
++
+     def edit(self, key, text):
+         with self.lock:
+             if self.active or key not in self.values or self.blocked:return
+@@ -142,7 +174,6 @@
+                 self.drafts[key] = text
+                 self.rows.pop(key, None)
+                 try:
+-                    from pid_settings import encode_value
+                     encode_value(key, int(text))
+                 except ValueError:
+                     pass
+--- v0.3.25/test_pid_gui.py
++++ v0.3.26/test_pid_gui.py
+@@ -54,3 +54,28 @@
+   self.w.pid_command(dict(self.w.pid.active))
+   for e in replies(self.w):self.w.pid.accept(e)
+   self.d.result();self.d.refresh();self.assertEqual(self.d.notes['speed_kp'].get(),'未確認');self.assertIn('test timeout',self.d.status.get())
++ def test_tab_style_matches_initial_and_switched_content(self):
++  from tkinter import ttk
++  d=self.d;style=ttk.Style(d)
++  tabs=d.notebook.tabs()
++  self.assertEqual(d.notebook.select(),tabs[0])
++  inactive,selected=self.root._pid_tab_images
++  self.assertEqual(inactive.get(3,3),(238,241,244))
++  self.assertEqual(selected.get(3,3),(255,255,255))
++  self.assertEqual(selected.get(3,7),(23,105,141))
++  self.assertEqual(inactive.height(),selected.height())
++  self.assertEqual(style.layout('Pid.TNotebook.Tab')[0][0],'Pid.Tab.surface')
++  self.assertEqual(style.lookup('Pid.TNotebook.Tab','foreground',('selected',)),'#24374b')
++  self.assertIn('bold',str(style.lookup('Pid.TNotebook.Tab','font',('selected',))))
++  self.assertEqual(style.lookup('Pid.TNotebook.Tab','foreground',('!selected',)),'#687b8c')
++  heights=[]
++  for index,key,other in [(0,'speed_kp','observer_c1'),(1,'observer_c1','speed_kp'),(0,'speed_kp','observer_c1')]:
++   d.notebook.select(index);self.root.update()
++   self.assertEqual(d.notebook.select(),tabs[index])
++   self.assertTrue(d.editors[key].winfo_ismapped())
++   self.assertFalse(d.editors[other].winfo_ismapped())
++   heights.append(d.notebook.winfo_reqheight())
++  self.assertEqual(len(set(heights)),1)
++  self.d.destroy();self.d=PidDialog(self.app);self.root.update()
++  self.assertEqual(self.d.notebook.index('current'),0)
++  self.assertTrue(self.d.editors['speed_kp'].winfo_ismapped())
+--- /dev/null
++++ v0.3.26/test_pid_refinements.py
+@@ -0,0 +1,133 @@
++"""Focused .26 regressions: atomic input handling and observable thread outcomes."""
++import queue
++import threading
++import unittest
++from unittest.mock import patch
++from pid_transactions import PidTransactions
++
++
++def assert_competition(case, state):
++    ready = threading.Barrier(3)
++    outcomes = queue.Queue()
++
++    def attempt(name, reserve):
++        try:
++            ready.wait(timeout=3)
++            reserve()
++        except ValueError as error:
++            outcomes.put((name, 'rejected', str(error)))
++        except BaseException as error:
++            outcomes.put((name, 'unexpected', repr(error)))
++        else:
++            outcomes.put((name, 'acquired', ''))
++
++    threads = [threading.Thread(target=attempt, args=('pid', state.reserve)),
++               threading.Thread(target=attempt, args=('experiment', state.reserve_experiment))]
++    for thread in threads:
++        thread.start()
++    try:
++        ready.wait(timeout=3)
++    finally:
++        for thread in threads:
++            thread.join(4)
++        case.assertFalse(any(t.is_alive() for t in threads), 'reservation thread did not terminate')
++    results = [outcomes.get_nowait() for _ in range(outcomes.qsize())]
++    case.assertEqual(len(results), 2, results)
++    case.assertEqual({name for name, _, _ in results}, {'pid', 'experiment'})
++    case.assertFalse([r for r in results if r[1] == 'unexpected'], results)
++    case.assertEqual(sum(kind == 'acquired' for _, kind, _ in results), 1, results)
++    rejected = [r for r in results if r[1] == 'rejected']
++    case.assertEqual(len(rejected), 1, results)
++    case.assertIn(rejected[0][2], ('PID 交易、實驗或連線轉換尚未完成。',
++                                 'PID 交易尚未完成，請等待回覆被確認後再開始。'))
++    case.assertNotEqual(bool(state.active), state.experiment)
++
++
++class RefinementTests(unittest.TestCase):
++    def test_invalid_inputs_are_atomic_and_recoverable(self):
++        invalid = [(), ('speed_kp',), 'bad', 1, {'key': 'speed_kp'},
++                   ('unknown', 0, 1), ([], 0, 1), ('speed_kp', True, 1),
++                   ('speed_kp', '100', 101), ('speed_kp', 100, True),
++                   ('speed_kp', 100, 32768), ('speed_kp', 100, -1),
++                   ('speed_kp_div', 128, 3), ('iq_reference_raw', 0, 1)]
++        for update in invalid:
++            with self.subTest(update=update):
++                state = PidTransactions()
++                state.operation_hint('preserve hint')
++                before = state.view()
++                with self.assertRaises(ValueError):
++                    state.reserve(update)
++                self.assertEqual(state.view(), before)
++                self.assertEqual(state.sequence, 0)
++                request = state.reserve()
++                self.assertTrue(state.accept(dict(request, phase='success', values={'speed_kp': 100})))
++                self.assertFalse(state.view()['pending'])
++
++    def test_invalid_input_does_not_damage_existing_transaction(self):
++        state = PidTransactions()
++        request = state.reserve(('speed_kp', 100, 101))
++        state.mark_sent(request)
++        before, active = state.view(), dict(state.active)
++        with self.assertRaises(ValueError):
++            state.reserve(('unknown', 0, 1))
++        self.assertEqual(state.view(), before)
++        self.assertEqual(state.active, active)
++        self.assertTrue(state.accept(dict(request, phase='success', values={'speed_kp': 101})))
++
++    def test_update_list_is_copied_and_signed_divisor_values_remain_valid(self):
++        state = PidTransactions()
++        update = ['observer_c1', -100, -101]
++        request = state.reserve(update)
++        update[2] = 999
++        self.assertEqual(request['update'], ('observer_c1', -100, -101))
++        state.invalidate('test')
++        state.reserve(('speed_kp_div', 128, 32768))
++
++    def test_competing_reservations_report_both_results(self):
++        assert_competition(self, PidTransactions())
++
++    def test_injected_runtime_error_makes_competition_assertion_fail(self):
++        # This is a test-of-the-test; the expected assertion is NOT a normal
++        # transaction failure or a hardware fault.
++        state = PidTransactions()
++        with patch.object(state, 'reserve_experiment', side_effect=RuntimeError('injected audit fault')):
++            with self.assertRaisesRegex(AssertionError, 'RuntimeError'):
++                assert_competition(self, state)
++
++    def test_release_preserves_uncertainty_and_reservation_can_recover(self):
++        state = PidTransactions()
++        state.reserve_experiment()
++        state.unverified = True
++        state.release_experiment()
++        self.assertFalse(state.experiment)
++        self.assertTrue(state.unverified)
++        with self.assertRaises(ValueError):
++            state.reserve_experiment()
++        request = state.reserve()
++        state.accept(dict(request, phase='success', values={'speed_kp': 100}))
++        self.assertEqual(state.reserve_experiment(), state.generation)
++        state.release_experiment()
++
++    def test_finished_wait_matches_run_and_has_explicit_timeout(self):
++        from pathlib import Path
++        from types import SimpleNamespace
++        from test_v03 import Tests
++        fixture = Tests()
++        events = queue.Queue()
++        events.put(('finished', '/other/data.csv'))
++        events.put(('finished', '/target/data.csv'))
++        fixture.wait_finished(SimpleNamespace(events=events), Path('/target/data.csv'), timeout=1)
++        self.assertTrue(events.empty())
++        with self.assertRaisesRegex(AssertionError, 'timed out waiting for finished'):
++            fixture.wait_finished(SimpleNamespace(events=events), Path('/target/data.csv'), timeout=.01)
++
++    def test_available_reads_one_shared_snapshot(self):
++        from test_pid_dialog import DialogTests
++        fixture = DialogTests()
++        fixture.setUp()
++        try:
++            with patch.object(fixture.d.transaction, 'view', wraps=fixture.d.transaction.view) as view:
++                self.assertTrue(fixture.d.available())
++                self.assertEqual(view.call_count, 1)
++        finally:
++            fixture.doCleanups()
+--- v0.3.25/test_pid_transactions.py
++++ v0.3.26/test_pid_transactions.py
+@@ -112,8 +112,18 @@
+             (dict(state=0,rpm=0,faults=0),('iq_reference_raw',0,1),'僅供讀取'),
+             (dict(state=0,rpm=0,faults=0),('speed_kp_div',128,129),'除數')]:
+             with self.subTest(update=update,sample=sample):
+-                w=worker();w.motor.sample.return_value=sample;e=execute(w,update)
+-                self.assertIn(expected_error,e['error']);w.motor.write_pid.assert_not_called()
++                w = worker()
++                w.motor.sample.return_value = sample
++                if update[0] in ('iq_reference_raw', 'speed_kp_div'):
++                    with self.assertRaisesRegex(ValueError, expected_error):
++                        w.request_pid(update)
++                    w.motor.sample.assert_not_called()
++                    w.motor.read_pid.assert_not_called()
++                    self.assertTrue(w.commands.empty())
++                else:
++                    event = execute(w, update)
++                    self.assertIn(expected_error, event['error'])
++                w.motor.write_pid.assert_not_called()
+                 self.assertFalse(w.pid.view()['pending'])
+         w=worker();e=execute(w,('speed_kp',100,200));self.assertIn('讀回不符',e['error']);self.assertTrue(w.pid_unverified)
+ 
+--- v0.3.25/test_v03.py
++++ v0.3.26/test_v03.py
+@@ -53,6 +53,18 @@
+   c=defaults();c.update(folder=folder,ramp_ms=500,dwell_s=.5,baseline_s=1.,poststop_s=1.,reach_timeout_s=6.,speeds=[1500],force_interval=.05,psu_interval=.2)
+   return c
+  def close(self,w):w.quit_event.set();w.join(5);self.assertFalse(w.is_alive())
++ def wait_finished(self, worker, path, timeout=14):
++  deadline = time.monotonic() + timeout
++  while True:
++   remaining = deadline - time.monotonic()
++   if remaining <= 0:
++    self.fail(f'timed out waiting for finished: {path}')
++   try:
++    key, value = worker.events.get(timeout=remaining)
++   except queue.Empty:
++    self.fail(f'timed out waiting for finished: {path}')
++   if key == 'finished' and Path(value) == path:
++    return
+  def test_complete_with_pre_post_and_psu(self):
+   with tempfile.TemporaryDirectory() as folder:
+    m=FakeMotor();f=FakeForce(None);p=FakeSupply(None)
+@@ -60,7 +72,8 @@
+    try:
+     w.submit('connect',('REAL','COM5'));self.wait(lambda:w.motor is not None)
+     c=self.cfg(folder);c.update(psu_enabled=True,psu_resource='USB::TEST',psu_channels=[1,2])
+-    w.submit('begin',c);self.wait(lambda:w.file is not None);self.wait(lambda:w.file is None)
++    w.submit('begin',c);self.wait(lambda:w.file is not None)
++    self.wait_finished(w, w.path)
+     self.assertEqual(w.path.name,'data.csv')
+     self.assertEqual(w.path.parent.parent,Path(folder))
+     self.assertTrue(all((w.path.parent/name).is_file() for name in ('data.csv','data.json','data_summary.csv','data_stages.csv')))

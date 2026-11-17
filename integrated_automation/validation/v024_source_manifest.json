@@ -1,0 +1,166 @@
+{
+  "app.py": {
+    "sha256": "de7cd4fa55a12950a964d042ca007637c9f240745faf63eee0860ca0d5798152",
+    "status": "changed"
+  },
+  "calibration.py": {
+    "sha256": "46d2f3ec1bc15706f1f73828be089d4980c4937f155909958b6c0f3644cbf3e0",
+    "status": "unchanged"
+  },
+  "config.py": {
+    "sha256": "77ed5f4e3a91a5764d21d1a59df138bcb22d1ae27d702af12b356d137252727b",
+    "status": "unchanged"
+  },
+  "controller.py": {
+    "sha256": "1379b90ca0d657b10dedf61122388c9cd43487e5edddcf162f0657be4980c3bd",
+    "status": "changed"
+  },
+  "dashboard.py": {
+    "sha256": "f82392cfa697fb902b38fe9f9152dda9521bb662cd3a4563c42e56a085207a21",
+    "status": "unchanged"
+  },
+  "devices.py": {
+    "sha256": "df9f4f9837a08b4013278cccd72894f7cd8d2ca7847c5e8c23019fc7464eb56f",
+    "status": "unchanged"
+  },
+  "force_reader.py": {
+    "sha256": "b1e00ed2bc46c7b18f5497eeaea94d3b05bc7edd7aceebfcccba82a058f35c1b",
+    "status": "unchanged"
+  },
+  "notices.py": {
+    "sha256": "0018eaa4d2dd52f941a3bea3e85d9adddd16cb6ab8690a1311b76c6019b09a87",
+    "status": "unchanged"
+  },
+  "pid_dialog.py": {
+    "sha256": "2a277b833b7195c897b72578719ac2308060e4dd5d57141b4274c3e788ff155f",
+    "status": "changed"
+  },
+  "pid_settings.py": {
+    "sha256": "6b202210df457797da96e3cba77c85b4d53a3fa87f50708a15594506fa41b871",
+    "status": "unchanged"
+  },
+  "pid_transactions.py": {
+    "sha256": "4963d783b29d1fd898be5c940ca19be035494a89218c2329bda7a41cfa0a1ebe",
+    "status": "new"
+  },
+  "plan_preview.py": {
+    "sha256": "6ed1a824907a25f918455dfda05ba90555c989ede595f62be883bdd9b4378d75",
+    "status": "unchanged"
+  },
+  "propellers.py": {
+    "sha256": "ca6479d099aa67541dcd1f3e05be62cfb86d05684a989e99c8345fe0da15cd16",
+    "status": "unchanged"
+  },
+  "protocol.py": {
+    "sha256": "12bad8bca6379f4f795dd673956c80faba3aeaef1abecdf0b2c0e8fd9bd13b58",
+    "status": "unchanged"
+  },
+  "report.py": {
+    "sha256": "05ecca80ec41b2c1ad1c360e5295620cadd87b79a7f391e0b3031e40dddde238",
+    "status": "unchanged"
+  },
+  "report_cli.py": {
+    "sha256": "a98722d64e3a57926d04b4373d38396a0d6d5b8f7aceb0279ca81d128c9f1508",
+    "status": "unchanged"
+  },
+  "sensors.py": {
+    "sha256": "d726269774730b5404b0c22cd2a965aef1e19bd286a0cdbb4667560e4def25d4",
+    "status": "unchanged"
+  },
+  "session_files.py": {
+    "sha256": "2195e1dd9b8ce5fc889855e43dfa91ed9cda2aeac71fda09892269ae3cb62654",
+    "status": "unchanged"
+  },
+  "summarize.py": {
+    "sha256": "a47e30d9bb0e881643875cffe1a6c693a5a89a175b3a1743815f96f94bc78673",
+    "status": "unchanged"
+  },
+  "test_calibration.py": {
+    "sha256": "3255b2704d9c50d42696ece8bd70a7d84535548b162013a1e95d926488d42445",
+    "status": "unchanged"
+  },
+  "test_data.py": {
+    "sha256": "ccd9cae833cad14933f3561f2038f469c451a6810588835b655cf0f6259778a8",
+    "status": "unchanged"
+  },
+  "test_feedback.py": {
+    "sha256": "00e5f8ff115011068af8d429db7a782242923493f8e62e3388a4cff444f066a4",
+    "status": "unchanged"
+  },
+  "test_force_reader.py": {
+    "sha256": "e4ff6605560ec76f9a2b2cd46d02af918183f375f9d0e08178cfc2f8006948dc",
+    "status": "unchanged"
+  },
+  "test_gui.py": {
+    "sha256": "69c6a3bc232be8950bab0458c90acb63c5e5c65e812c02b9a8756cb66d088de4",
+    "status": "unchanged"
+  },
+  "test_monitor.py": {
+    "sha256": "a6de106ea114ae26bbe463bc2b0809711c91097a3882bd65fea659da08202f27",
+    "status": "unchanged"
+  },
+  "test_pid_app.py": {
+    "sha256": "551a7197a9f1e4e90aaae9065092e3633b5a5ab8dbfc03db94df008597534b20",
+    "status": "new"
+  },
+  "test_pid_dialog.py": {
+    "sha256": "00503a71bf1a71e5a38c81bdc9f09ef335e9a889b5b46db338e9012bae7e6fae",
+    "status": "changed"
+  },
+  "test_pid_gui.py": {
+    "sha256": "f2027810a49c90de2a6e6b6c5348dfd2e0bc6072a33009889a28eec7844a9a10",
+    "status": "new"
+  },
+  "test_pid_settings.py": {
+    "sha256": "2f782949a9067f9e490417883f0b42cf0fa95b2e9b22c97c01a05b7d00c7c7ec",
+    "status": "changed"
+  },
+  "test_pid_transactions.py": {
+    "sha256": "637dd2e110dd38791dd5d49acf519286d263c27656232f9ed4c9d28bb9529b83",
+    "status": "new"
+  },
+  "test_protocol.py": {
+    "sha256": "52891f58da9607b6b9833a105fd2c5dbb56f81d419eab44cf5a66826f1a08d87",
+    "status": "unchanged"
+  },
+  "test_report.py": {
+    "sha256": "795b8c05ecca441e627b66a81fc8de9baa1332dd7c40b62178beb51664347488",
+    "status": "unchanged"
+  },
+  "test_session_files.py": {
+    "sha256": "332b9380e60e389552efd92ded2f15c7a5ce2a9af271b2821893528af0945834",
+    "status": "unchanged"
+  },
+  "test_stop_preview.py": {
+    "sha256": "3dc6f80a496929c2fdd3e9d87b061c08ee8d25a124b3f9600ec3e6e156fecc39",
+    "status": "unchanged"
+  },
+  "test_summary.py": {
+    "sha256": "395e77e7072940ab855438a17f3c7e851340b330fe7cd485e97e1c44c9278cb3",
+    "status": "unchanged"
+  },
+  "test_trends.py": {
+    "sha256": "52c7ce717c8f96bfaecc503c9e250fd481dec5a70df790b41a2b228faa5987ac",
+    "status": "unchanged"
+  },
+  "test_user_channels.py": {
+    "sha256": "0342925a72bc296fd094ff7f7dd4625c1521d284096533a94bce0b8b5b65652c",
+    "status": "unchanged"
+  },
+  "test_v03.py": {
+    "sha256": "db70d29c5ff39e595001bcb0a1cf5d29e77266775b0d83b512340f256ba5d614",
+    "status": "unchanged"
+  },
+  "theme.py": {
+    "sha256": "9fb0a1eb31d997dfb7b485d10e4d6ecaa83464c7ad0a2ccf8ef6ade6b251f542",
+    "status": "unchanged"
+  },
+  "ui_widgets.py": {
+    "sha256": "ed156b1a2fd2018b6b50c5e3ae868c67ceaa64a292c874b169c6646afd0c47d1",
+    "status": "unchanged"
+  },
+  "units.py": {
+    "sha256": "0ef48b91bcfebc8a492cd947a18c840a70a460cc7c5414294fa718648ee735ed",
+    "status": "unchanged"
+  }
+}

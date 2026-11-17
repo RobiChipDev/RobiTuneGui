@@ -1,0 +1,395 @@
+--- v0.3.27/app.py
++++ v0.3.28/app.py
+@@ -18,7 +18,7 @@
+ DEVICE_GROUPS = [
+  ('馬達／力規',[('port','馬達 COM'),('force_enabled','啟用力規'),('force_port','力規 COM'),('force_baud','力規鮑率'),('force_addr','站號'),('force_parity','校驗 N/E/O'),('force_stopbits','停止位元 1/2'),('force_order','字序 HH-LL/LL-HH'),('force_interval','力規擷取間隔 s')]),
+  ('PID 紀錄',[('speed_kp','Speed Kp（Motor Pilot 手動抄錄）'),('speed_ki','Speed Ki（Motor Pilot 手動抄錄）'),('speed_kd','Speed Kd（Motor Pilot 手動抄錄）')]),
+- ('電供',[('psu_enabled','啟用電供擷取'),('psu_backend','SERIAL/VISA'),('psu_resource','COM 或 VISA 資源'),('psu_baud','鮑率'),('psu_channels','通道 1 或 1,2'),('psu_interval','擷取間隔 s')]),
++ ('電供',[('psu_enabled','啟用電供擷取'),('psu_backend','SERIAL/VISA'),('psu_resource','COM 或 VISA 資源'),('psu_baud','鮑率'),('psu_channels','額外讀取電供 CH2（CH1 固定讀取）'),('psu_interval','擷取間隔 s')]),
+  ('力規 CH1',[('scale1','倍率（預設 0.01）'),('zero1','原始零點'),('unit1','單位 N/gf/kgf/Nm/Nmm/kgfcm')]),
+  ('力規 CH2',[('scale2','倍率（預設 0.001）'),('zero2','原始零點'),('unit2','單位 N/gf/kgf/Nm/Nmm/kgfcm')]),
+  ('力規通道對應',[('thrust_channel','推力通道 0未指定/1/2'),('torque_channel','扭矩通道 0未指定/1/2')]),
+@@ -30,12 +30,12 @@
+  def __init__(self,root):
+   self.root=root;self.worker=Controller();self.connected=False;self.connecting=False;self.busy=False;self.pending_begin=False;self.pending_tare=False;self.motor_stopped=False
+   self.cfg=defaults();self.values={};self.force_state='stopped';self.last_callback_error=None;self.history=[];self.dialogs=[];self.latest_output_dir=None;self.report_state='';self.last_notice=None;self.last_notice_key=None
+-  root.title('Robi v0.3.27 · 實驗監看');root.geometry('1180x790');root.minsize(1040,700)
++  root.title('Robi v0.3.28 · 實驗監看');root.geometry('1180x790');root.minsize(1040,700)
+   style=apply_theme(root)
+   outer=ttk.Frame(root,padding=(14,10));self.outer=outer;outer.pack(fill='both',expand=True)
+   heading=ttk.Frame(outer);heading.pack(fill='x',pady=(0,8))
+   ttk.Label(heading,text='Robi',font=('Segoe UI',20,'bold'),foreground='#17212f').pack(side='left')
+-  ttk.Label(heading,text='  馬達實驗工作台  /  v0.3.27',foreground='#788392').pack(side='left')
++  ttk.Label(heading,text='  馬達實驗工作台  /  v0.3.28',foreground='#788392').pack(side='left')
+   self.sim=tk.BooleanVar(value=True)
+   self.simbtn=PillButton(heading,text='實機鎖定（僅模擬）',command=self.toggle_mode,role='mode_locked',width=230,height=40);self.simbtn.pack(side='right')
+   workspace=ttk.Frame(outer);workspace.pack(fill='both',expand=True)
+@@ -112,7 +112,12 @@
+   width=min(max_w,max(1100,self.root.winfo_reqwidth()+24))
+   height=min(max_h,max(740,self.root.winfo_reqheight()+24))
+   self.root.minsize(min(width,1000),min(height,700));self.root.geometry(f'{width}x{height}')
++ def psu_active(self):
++  worker=getattr(self.worker,'psu_worker',None)
++  return bool(worker and worker.is_alive())
+  def toggle_mode(self):
++  if self.psu_active():
++   messagebox.showinfo('模式切換','請先在裝置設定停用電供擷取，再切換模式。',parent=self.root);return
+   if self.connected or self.connecting or self.force_state in ('reading','connecting','stopping'):return
+   if self.sim.get() and not messagebox.askokcancel('解除實機鎖定','解除後可連接實體設備。是否繼續？',parent=self.root):return
+   self.sim.set(not self.sim.get());self.mode_changed()
+@@ -290,6 +295,9 @@
+   c=dict(self.cfg)
+   for k,var in variables.items():
+    x=var.get();base=defaults()[k]
++   if k=='psu_channels':
++    c[k]=[1,2] if x else [1]
++    continue
+    if isinstance(base,bool):c[k]=bool(x)
+    elif isinstance(base,list):c[k]=[int(n.strip()) for n in str(x).replace('，',',').split(',')]
+    elif k in ('scale1','scale2'):c[k]=float(x) if str(x).strip() else None
+@@ -309,6 +317,7 @@
+    if any(c[k]!=self.cfg[k] for k in self.worker.FORCE_COMM) or not c['force_enabled']:raise ValueError('更改力規通訊設定前，請先停止力規讀取')
+    self.worker.submit('force_apply',dict(c))
+   self.cfg=dict(c)
++  self.worker.submit('psu_apply',('SIMULATION' if self.sim.get() else 'REAL',dict(c)))
+   if changed:
+    self.latest_output_dir=None
+    self.set_propellers(entries,'未選擇')
+@@ -326,6 +335,9 @@
+     if key=='mount':
+      if not var.get():var.set('未設定')
+      widget=ttk.Combobox(page,textvariable=var,values=('未設定',*MOUNTS),state='readonly',style='Propeller.TCombobox')
++    if key=='psu_channels':
++     var=tk.BooleanVar(value=2 in value);variables[key]=var
++     widget=ttk.Checkbutton(page,variable=var)
+     widget.grid(row=i,column=1,sticky='ew')
+   buttons=ttk.Frame(win,padding=8);buttons.pack(fill='x')
+   def apply():
+@@ -447,7 +459,7 @@
+    if dialog:
+     for k,var in dialog[2].items():
+      value=self.cfg[k]
+-     var.set(','.join(map(str,value)) if isinstance(value,list) else '' if value is None else value)
++     var.set((2 in value) if k=='psu_channels' else ','.join(map(str,value)) if isinstance(value,list) else '' if value is None else value)
+   except Exception as e:messagebox.showerror('載入設定',str(e),parent=parent)
+ 
+  def save(self,kind='experiment',parent=None):
+@@ -491,7 +503,7 @@
+    try:
+     import pyvisa
+     rm=pyvisa.ResourceManager();self.worker.emit('log','VISA：'+repr(rm.list_resources()));rm.close()
+-   except Exception as e:self.worker.emit('log','VISA：'+str(e))
++   except Exception as e:self.worker.emit('log','VISA 列舉不可用（SERIAL 連線不受影響）：'+str(e))
+   threading.Thread(target=scan,daemon=True).start()
+  def open_report(self):
+   if self.busy or self.pending_begin:
+@@ -510,7 +522,7 @@
+   args=run_notice(self.busy,d.phase,d.remaining,d.ended,d.reason,self.report_state)
+   if args!=self.last_notice:
+    title,detail,bg,fg=args;self.notice.configure(bg=bg);self.notice_row.configure(bg=bg);self.notice_title.configure(text=title,bg=bg,fg=fg);self.notice_detail.configure(text=detail,bg=bg,fg=fg);self.last_notice=args
+-   self.root.title('Robi v0.3.27 · '+title+(f' {max(0,d.remaining):.0f}s' if self.busy and d.phase=='poststop' else ''))
++   self.root.title('Robi v0.3.28 · '+title+(f' {max(0,d.remaining):.0f}s' if self.busy and d.phase=='poststop' else ''))
+   key='poststop' if self.busy and d.phase=='poststop' else 'ended' if d.ended and not self.busy else 'active' if self.busy else 'idle'
+   if key!=self.last_notice_key:
+    if key=='poststop':
+@@ -553,6 +565,10 @@
+     self.values.pop(f'force CH{channel}',None)
+     self.dashboard.force_trends[channel].series.clear()
+     self.logline(f'CH{channel} 已設定軟體零點（{zero:.3f} count）。')
++   elif key=='psu_state':
++    self.logline('電供：'+value['detail'])
++    if value['state']!='reading':
++     self.values.pop('psu CH1',None);self.values.pop('psu CH2',None)
+    elif key=='force_reset':self.values={}
+    elif key=='sensor':
+     name=value['device']+' CH'+str(value['channel']);data=self.values.setdefault(name,{})
+@@ -567,6 +583,7 @@
+    elif key=='connected':
+     self.connected=value
+     self.update_pid_dialog()
++    if value:self.worker.submit('psu_apply',('SIMULATION' if self.sim.get() else 'REAL',self.getcfg()))
+     if value and self.cfg['force_enabled']:self.worker.submit('force_start',('SIMULATION' if self.sim.get() else 'REAL',self.getcfg()))
+    elif key=='sample':
+     sample=value['sample']
+@@ -579,7 +596,7 @@
+      self.connecting=False;messagebox.showerror('馬達連線失敗',value['error'])
+   locked=self.busy or self.pending_begin or self.pending_tare
+   self.connectbtn.configure(state='disabled' if self.connected or self.connecting else 'normal',text='連線中…' if self.connecting else '馬達連線')
+-  self.simbtn.configure(role='mode_locked' if self.sim.get() else 'mode',text=('實機鎖定（僅模擬）' if self.sim.get() else '實機已解鎖'),state='disabled' if self.connected or self.connecting or self.force_state in ('connecting','reading','stopping') else 'normal')
++  self.simbtn.configure(role='mode_locked' if self.sim.get() else 'mode',text=('實機鎖定（僅模擬）' if self.sim.get() else '實機已解鎖'),state='disabled' if self.connected or self.connecting or self.psu_active() or self.force_state in ('connecting','reading','stopping') else 'normal')
+   self.startbtn.configure(state='disabled' if locked or not self.connected or self.worker.start_block_reason() else 'normal')
+   self.forcebtn.configure(text='停止力規讀取' if self.force_state in ('reading','connecting') else '停止中…' if self.force_state=='stopping' else '開始力規讀取',state='disabled' if locked or self.force_state=='stopping' else 'normal')
+   self.propeller_combo.configure(state='disabled' if locked else 'readonly')
+--- v0.3.27/controller.py
++++ v0.3.28/controller.py
+@@ -71,6 +71,7 @@
+         super().__init__(daemon=True)
+         self.commands=queue.Queue();self.events=queue.Queue();self.sensor_q=queue.Queue(maxsize=2000)
+         self.overflow=threading.Event();self.stop_event=threading.Event();self.quit_event=threading.Event()
++        self.psu_worker=None;self.psu_cfg=None;self.psu_pending=None;self.psu_q=queue.Queue(maxsize=2000)
+         self.force_worker=None;self.force_cfg=None;self.force_state='stopped';self.force_stop_requested=False
+         self.tare_samples = {'1': deque(maxlen=100), '2': deque(maxlen=100)}
+         self.stopped_sample_at = None
+@@ -184,6 +185,60 @@
+         validate_plan(c)
+         if self.force_worker and self.force_worker.is_alive():self.start_force(c,'REAL')
+         self.emit('log','力規換算設定已套用；讀取保持運作。')
++    PSU_COMM = ('psu_backend','psu_resource','psu_baud','psu_channels','psu_interval')
++
++    def apply_psu(self, c, mode=None):
++        if self.file:
++            raise ValueError('實驗期間不可變更電供擷取設定')
++        validate_plan(c)
++        mode = mode or self.mode
++        if self.motor and mode != self.mode:
++            raise ValueError('請先斷線再切換模式')
++        if mode == 'SIMULATION' or not c['psu_enabled']:
++            self.psu_pending = None
++            worker = getattr(self, 'psu_worker', None)
++            if worker:
++                worker.request_stop()
++            self.emit('psu_state', dict(state='stopped',detail='未啟用實體電供擷取'))
++            return
++        if not self.motor:
++            self.mode = mode
++        worker = getattr(self, 'psu_worker', None)
++        if worker and worker.is_alive():
++            if not worker.stop_event.is_set() and all(c[k] == self.psu_cfg[k] for k in self.PSU_COMM):
++                return
++            self.psu_pending = dict(c)
++            worker.request_stop()
++            self.emit('psu_state',dict(state='stopping',detail='正在釋放舊連線，完成後套用新設定'))
++            return
++        self._open_psu(c)
++
++    def _open_psu(self, c):
++        self.psu_pending = None
++        self.psu_cfg = dict(c)
++        self.psu_q = queue.Queue(maxsize=2000)
++        factory = None if not self.sensor_factory else self.sensor_factory['psu']
++        self.psu_worker = SensorWorker('psu',dict(c),self.psu_q,self.overflow,factory)
++        self.emit('psu_state',dict(state='connecting',detail='正在開啟 '+c['psu_resource']))
++        self.psu_worker.start()
++
++    def service_psu(self):
++        worker = getattr(self,'psu_worker',None)
++        if not worker:
++            return
++        # A stopped/replaced worker's queue must not refresh the display or CSV.
++        while not self.psu_q.empty():
++            row = self.psu_q.get_nowait()
++            if not worker.stop_event.is_set():
++                if self.file and (not self.cfg['psu_enabled'] or (row.get('row_type','measurement')=='measurement' and row.get('channel') not in self.cfg['psu_channels'])):
++                    continue
++                try:self.sensor_q.put_nowait(row)
++                except queue.Full:self.overflow.set();worker.request_stop();break
++        if not worker.is_alive():
++            self.psu_worker = None
++            if self.psu_pending is not None:
++                self._open_psu(self.psu_pending)
++
+     def clear_tare_samples(self):
+         for samples in self.tare_samples.values():
+             samples.clear()
+@@ -278,6 +333,10 @@
+             raise ValueError(f"啟動條件未滿足：狀態={s['status']}；故障=0x{s['faults']:X}；控制模式={s['mode']}（SPEED應為3）")
+         if self.mode=='SIMULATION' and self.force_worker and self.force_worker.is_alive():
+             raise ValueError('模擬測試前請先停止實機力規')
++        if self.mode == 'REAL' and c['psu_enabled']:
++            worker = getattr(self,'psu_worker',None)
++            if worker and worker.is_alive() and (worker.stop_event.is_set() or any(c[k]!=self.psu_cfg[k] for k in self.PSU_COMM)):
++                raise ValueError('電供設定正在切換，請等待完成後再開始')
+         self.cfg = dict(c)
+         self.latest = {}
+         self.target = 0
+@@ -305,7 +364,7 @@
+         folder=create_session_folder(c['folder'],self.mode,c['speeds'],c.get('run_name',''),label_override=label)
+         self.path=folder/'data.csv'
+         factors = direction_factors(c.get('mount'), (propeller or {}).get('rotation'))
+-        metadata=dict(self.cfg,mode=self.mode,version='0.3.27',direction_factors=factors,
++        metadata=dict(self.cfg,mode=self.mode,version='0.3.28',direction_factors=factors,
+             pid_board_readback=pid_readback,firmware_scale_config=getattr(self.motor,'scale_config',None),
+             conversion_gravity_m_s2=9.80665,firmware_identity='operator must verify; not read back',
+             note='simulation never opens physical sensor ports; measured channels kept separate')
+@@ -333,9 +392,8 @@
+                     if name == 'force':
+                         self.start_force(c)
+                         continue
+-                    w = SensorWorker(name, c, self.sensor_q, self.overflow, factory)
+-                    self.workers.append(w)
+-                    w.start()
++                    if not getattr(self,'psu_worker',None) or not self.psu_worker.is_alive():
++                        self._open_psu(c)
+         self.event('preflight','啟動前確認各通道資料；馬達尚未啟動')
+     def drain(self):
+         for _ in range(2000):
+@@ -346,10 +404,13 @@
+             if in_session:self.write(r)
+             if typ=='error':
+                 self.emit('log',name+' 錯誤：'+r['detail'])
++                if name=='psu':self.emit('psu_state',dict(state='error',detail=r['detail']))
+                 if name=='force':
+                     self.clear_tare_samples()
+                     self.force_state='error';self.emit('force_state',dict(state='error',detail=r['detail']))
+                 if in_session and self.phase not in ('stopping','poststop'):self.halt(name+'_error',r['detail'])
++            elif typ=='identity':
++                if name=='psu':self.emit('psu_state',dict(state='reading',detail='已連線：'+r['detail']))
+             elif typ=='measurement':
+                 for f in ('raw_signed_int32','supply_V','supply_A','supply_W'):
+                     if f in r:
+@@ -519,6 +580,7 @@
+                 if k=='connect':
+                     if self.motor:raise ValueError('請先斷線')
+                     if v[0]=='SIMULATION' and self.force_worker and self.force_worker.is_alive():raise ValueError('請先停止實機力規，再切換模擬連線')
++                    if v[0]=='SIMULATION' and getattr(self,'psu_worker',None) and self.psu_worker.is_alive():raise ValueError('請先在裝置設定停用電供擷取，再切換模擬連線')
+                     self.cancel_pid('正在建立新的連線世代', blocked=True)
+                     self.mode,self.port=v
+                     self.emit('log','馬達連線握手中：'+self.port)
+@@ -533,6 +595,7 @@
+                         self.cancel_pid('已連線', blocked=self.disconnect_requested)
+                     self.emit('connect_result',dict(ok=True))
+                     self.phase='idle';self.emit('connected',True);self.emit('log','已連線，尚未啟動馬達')
++                elif k=='psu_apply':self.apply_psu(v[1],v[0])
+                 elif k=='force_start':self.start_force(v[1],v[0])
+                 elif k=='force_stop':self.stop_force()
+                 elif k=='force_apply':self.apply_force(v)
+@@ -549,7 +612,7 @@
+                     self.emit('fault_ack',None)
+                 elif k == 'disconnect':
+                     self.service_disconnect()
+-                self.drain();self.check_force_exit();s=None
++                self.service_psu();self.drain();self.check_force_exit();s=None
+                 if self.motor:
+                     a=time.monotonic()
+                     try:
+@@ -598,4 +661,6 @@
+         for w in self.workers:w.request_stop()
+         if self.force_worker:
+             self.force_worker.request_stop();self.force_worker.join(1.2)
++        if getattr(self,'psu_worker',None):
++            self.psu_worker.request_stop();self.psu_worker.join(2)
+         if self.motor:self.motor.close()
+--- v0.3.27/dashboard.py
++++ v0.3.28/dashboard.py
+@@ -101,13 +101,15 @@
+             cell=ttk.Frame(readings);cell.grid(row=row,column=col,sticky='ew',padx=8,pady=2)
+             label_widget=ttk.Label(cell,text=label,foreground='#64748b',font=('',8));label_widget.pack(anchor='w')
+             v=tk.StringVar(value='—');self.readings[key]=v;value_widget=ttk.Label(cell,textvariable=v,font=('',11,'bold'));value_widget.pack(anchor='w');self.reading_cells.append((key,label_widget,value_widget))
++        self.psu_extra=tk.StringVar(value='電供 CH2：未啟用擷取')
++        ttk.Label(readings,textvariable=self.psu_extra,foreground='#64748b',font=('',8)).grid(row=3,column=0,columnspan=4,sticky='w',padx=8)
+         self.plan=None;self.completed=set();self.done_keys=set();self.started=False;self.ended=False;self.reason='';self.phase='disconnected';self.index=0;self.active=False;self.sample=None;self.rows=[];self.remaining=0;self.duration=0;self.alert=''
+     def compact_readings(self):
+         self.speed_card.configure(padding=6)
+         self.rpm_trend.configure(height=20)
+         for ch,trend in self.force_trends.items():
+             self.force_titles[ch].configure(padding=6);trend.configure(height=30)
+-        short={'bus':'VBUS','amps':'Imotor','wi':'Wi','wo':'Wo','temp':'板溫','iq':'Iq','id':'Id','eff':'gf/W','supply':'電供 V','limits':'設定 V/A','cc':'CC','coil':'T2／環溫'}
++        short={'bus':'VBUS','amps':'CH1 電流','wi':'CH1 Wi','wo':'Wo','temp':'板溫','iq':'Iq','id':'Id','eff':'gf/W','supply':'電供 CH1 V','limits':'設定 V/A','cc':'CC','coil':'T2／環溫'}
+         for key,label,value in self.reading_cells:
+             label.pack_forget();value.pack_forget();label.configure(text=short[key]);label.pack(side='left',padx=(0,4));value.pack(side='right')
+     def set_plan(self,speeds,baseline,dwell,poststop):
+@@ -201,7 +203,7 @@
+             if d and force_state=='reading' and age<=2:self.force_trends[ch].push(d['received'],numeric,source=source,gap=max(2.,cfg['force_interval']*3),label=(unit if value not in ('',None) else 'count')+' · 30s')
+             else:self.force_trends[ch].draw()
+             self.force_fresh[ch].set(status+(f' · {age:.1f}s 前' if d and age<10000 else ''))
+-        p=data.get('psu CH1',{});fresh=busy and now-p.get('received',-1e30)<=5;note='（保留）' if p and not fresh else ''
++        p=data.get('psu CH1',{});fresh=cfg.get('psu_enabled',False) and now-p.get('received',-1e30)<=max(5.,cfg.get('psu_interval',1.)*3);note='（保留）' if p and not fresh else ''
+         for key,source,unit in [('amps','supply_A','A'),('wi','supply_W','W'),('supply','supply_V','V')]:self.readings[key].set(pretty(p.get(source))+' '+unit+note)
+         self.readings['limits'].set(pretty(p.get('supply_set_V'))+' V / '+pretty(p.get('supply_limit_A'))+' A'+note)
+         cc=p.get('supply_current_limited');self.readings['cc'].set(('● CC 限流' if cc==1 else 'CV／未限流' if cc==0 else '—')+note)
+@@ -209,3 +211,12 @@
+         eff=gf*factors.get('thrust',1)/w if fresh and force_state=='reading' and now-thrust.get('received',-1e30)<=2 and gf is not None and w is not None and w>0 else None
+         self.readings['eff'].set(pretty(eff)+' gf/W · 即時估算' if eff is not None else '— gf/W')
+         self.readings['coil'].set('— / — °C · 尚未接入')
++        if hasattr(self,'psu_extra'):
++            q=data.get('psu CH2',{})
++            if not cfg.get('psu_enabled') or 2 not in cfg.get('psu_channels',[1]):text='電供 CH2：未啟用擷取'
++            elif not q:text='電供 CH2：等待讀值'
++            else:
++                state='即時' if now-q.get('received',-1e30)<=max(5.,cfg.get('psu_interval',1.)*3) else '資料過期'
++                cc2=q.get('supply_current_limited')
++                text='電供 CH2：'+pretty(q.get('supply_V'))+' V ｜ '+pretty(q.get('supply_A'))+' A ｜ '+pretty(q.get('supply_W'))+' W ｜ 設定 '+pretty(q.get('supply_set_V'))+' V / '+pretty(q.get('supply_limit_A'))+' A ｜ '+('CC' if cc2==1 else 'CV／未限流' if cc2==0 else '狀態未知')+' ｜ '+state
++            self.psu_extra.set(text)
+--- v0.3.27/test_psu_monitor.py
++++ v0.3.28/test_psu_monitor.py
+@@ -0,0 +1,69 @@
++import csv,queue,tempfile,time,unittest,threading
++from config import defaults
++from controller import Controller
++from devices import SupplyDevice
++from test_v03 import FakeMotor,SupplyTransport
++class Supply:
++ identity='GW INSTEK,GPP-6030,MOCK,1'
++ def __init__(self,cfg):self.cfg=cfg;self.closed=False;self.fail=False
++ def read(self,emit,stop):
++  if self.fail:raise TimeoutError('injected')
++  for ch in self.cfg['psu_channels']:
++   now=time.monotonic();emit(dict(device='psu',channel=ch,receive_mono=now,request_start_mono=now,supply_V=24.,supply_A=1.,supply_W=24.))
++ def close(self):self.closed=True
++class PsuMonitorTests(unittest.TestCase):
++ def setUp(self):
++  self.devices=[];self.motor=FakeMotor();self.overlap=False
++  def factory(c):
++   if any(not d.closed for d in self.devices):self.overlap=True
++   d=Supply(c);self.devices.append(d);return d
++  self.w=Controller(lambda p:self.motor,{'psu':factory})
++  self.c=dict(defaults(),force_enabled=False,psu_enabled=True,psu_resource='COM7',psu_interval=.2)
++ def tearDown(self):
++  self.w.quit_event.set();self.w.join(5);self.assertFalse(self.w.is_alive())
++  self.assertTrue(all(d.closed for d in self.devices));self.assertFalse(self.overlap)
++ def wait(self,p,timeout=12):
++  until=time.monotonic()+timeout
++  while time.monotonic()<until:
++   if p():return
++   time.sleep(.01)
++  self.fail('condition timeout')
++ def start(self):
++  self.w.submit('psu_apply',('REAL',self.c));self.wait(lambda:('psu','1','supply_V') in self.w.latest)
++ def test_idle_without_motor_files_and_reapply_reuses(self):
++  self.start();worker=self.w.psu_worker
++  self.assertIsNone(self.w.motor);self.assertIsNone(self.w.file);self.assertEqual(self.motor.starts,0)
++  self.w.submit('psu_apply',('REAL',self.c));time.sleep(.3)
++  self.assertIs(self.w.psu_worker,worker);self.assertEqual(len(self.devices),1)
++ def test_ch2_switch_and_disable_release(self):
++  self.start();self.w.submit('psu_apply',('REAL',dict(self.c,psu_channels=[1,2])))
++  self.wait(lambda:('psu','2','supply_V') in self.w.latest);self.assertEqual(len(self.devices),2)
++  self.w.submit('psu_apply',('REAL',dict(self.c,psu_enabled=False)));self.wait(lambda:self.w.psu_worker is None)
++ def test_simulation_no_open(self):
++  self.w.submit('psu_apply',('SIMULATION',self.c));time.sleep(.3);self.assertEqual(self.devices,[])
++ def test_error_retry(self):
++  self.start();self.devices[0].fail=True;self.wait(lambda:self.w.psu_worker is None)
++  self.w.submit('psu_apply',('REAL',self.c));self.wait(lambda:len(self.devices)==2)
++ def test_session_and_stop_disconnect_preserve_monitor(self):
++  with tempfile.TemporaryDirectory() as folder:
++   self.c.update(folder=folder,ramp_ms=500,dwell_s=.5,baseline_s=1.,poststop_s=1.,reach_timeout_s=6.,speeds=[1500])
++   self.start();old=self.w.psu_worker
++   self.w.submit('connect',('REAL','COM5'));self.wait(lambda:self.w.motor is not None)
++   self.w.submit('begin',self.c);self.wait(lambda:self.w.file is not None);path=self.w.path
++   deadline=time.monotonic()+12
++   while True:
++    k,v=self.w.events.get(timeout=max(.01,deadline-time.monotonic()))
++    if k=='finished':break
++    if time.monotonic()>deadline:self.fail('no finished')
++   self.assertIs(self.w.psu_worker,old);self.assertTrue(old.is_alive())
++   with path.open(encoding='utf-8-sig') as f:rows=list(csv.DictReader(f))
++   power=[r for r in rows if r['device']=='psu' and r['row_type']=='measurement']
++   self.assertTrue(power);self.assertTrue(all(r['channel']=='1' for r in power));self.assertTrue(all(float(r['elapsed_s'])>=0 for r in power))
++   self.w.stop_event.set();time.sleep(.3);self.assertTrue(old.is_alive())
++   self.w.submit('disconnect');self.wait(lambda:self.w.motor is None);self.assertTrue(old.is_alive())
++ def test_adapter_only_selected_channels(self):
++  for channels in ([1],[1,2]):
++   t=SupplyTransport();d=SupplyDevice(dict(self.c,psu_channels=channels),t);rows=[]
++   d.read(rows.append,threading.Event());d.close()
++   self.assertEqual({r['channel'] for r in rows},set(channels));self.assertEqual(len(rows),6*len(channels))
++   self.assertTrue(all(q.endswith('?') for q in t.queries))
+--- v0.3.27/test_v03.py
++++ v0.3.28/test_v03.py
+@@ -87,7 +87,7 @@
+     self.assertTrue(any(r['reason']=='stage_timed_complete' for r in rows))
+     self.assertTrue(any(r['reason']=='stop_state_confirmed' for r in rows))
+     self.assertTrue(any(r['reason']=='session_end' and r['detail']=='sequence_complete' for r in rows))
+-    self.assertEqual(m.starts,1);self.assertTrue(m.stops>=1);self.assertFalse(f.closed);self.assertTrue(p.closed);self.assertTrue(w.force_worker.is_alive())
++    self.assertEqual(m.starts,1);self.assertTrue(m.stops>=1);self.assertFalse(f.closed);self.assertFalse(p.closed);self.assertTrue(w.psu_worker.is_alive());self.assertTrue(w.force_worker.is_alive())
+     self.assertTrue(all(float(r['elapsed_s'])>=0 for r in rows))
+    finally:self.close(w)
+  def test_simulation_opens_no_sensor(self):

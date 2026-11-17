@@ -1,0 +1,10 @@
+test_disconnect_stop_does_not_lose_intent (test_reproduce_v024.Reproduce.test_disconnect_stop_does_not_lose_intent) ... OBSERVED motor_present=False blocked=False queue_empty=True
+ok
+test_force_off_pending_rejects_before_files (test_reproduce_v024.Reproduce.test_force_off_pending_rejects_before_files) ... ok
+test_force_on_pending_rejects_before_files (test_reproduce_v024.Reproduce.test_force_on_pending_rejects_before_files) ... ok
+test_operation_hint_survives_refresh (test_reproduce_v024.Reproduce.test_operation_hint_survives_refresh) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.911s
+
+OK

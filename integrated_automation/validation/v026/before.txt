@@ -1,0 +1,214 @@
+test_competing_reservations_report_both_results (test_pid_refinements.RefinementTests.test_competing_reservations_report_both_results) ... ERROR
+test_injected_runtime_error_makes_competition_assertion_fail (test_pid_refinements.RefinementTests.test_injected_runtime_error_makes_competition_assertion_fail) ... ERROR
+test_invalid_input_does_not_damage_existing_transaction (test_pid_refinements.RefinementTests.test_invalid_input_does_not_damage_existing_transaction) ... ok
+test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) ... 
+  test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=()) ... FAIL
+  test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=('speed_kp',)) ... ERROR
+  test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update='bad') ... ERROR
+  test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=1) ... ERROR
+  test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update={'key': 'speed_kp'}) ... ERROR
+  test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=('unknown', 0, 1)) ... ERROR
+  test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=([], 0, 1)) ... ERROR
+  test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=('speed_kp', True, 1)) ... FAIL
+  test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=('speed_kp', '100', 101)) ... FAIL
+  test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=('speed_kp', 100, True)) ... FAIL
+  test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=('speed_kp', 100, 32768)) ... FAIL
+  test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=('speed_kp', 100, -1)) ... FAIL
+  test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=('speed_kp_div', 128, 3)) ... FAIL
+  test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=('iq_reference_raw', 0, 1)) ... FAIL
+test_release_preserves_uncertainty_and_reservation_can_recover (test_pid_refinements.RefinementTests.test_release_preserves_uncertainty_and_reservation_can_recover) ... ERROR
+test_update_list_is_copied_and_signed_divisor_values_remain_valid (test_pid_refinements.RefinementTests.test_update_list_is_copied_and_signed_divisor_values_remain_valid) ... FAIL
+
+======================================================================
+ERROR: test_competing_reservations_report_both_results (test_pid_refinements.RefinementTests.test_competing_reservations_report_both_results)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/test_pid_refinements.py", line 87, in test_competing_reservations_report_both_results
+    assert_competition(self, PidTransactions())
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/test_pid_refinements.py", line 25, in assert_competition
+    threading.Thread(target=attempt, args=('experiment', state.reserve_experiment))]
+                                                         ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'PidTransactions' object has no attribute 'reserve_experiment'
+
+======================================================================
+ERROR: test_injected_runtime_error_makes_competition_assertion_fail (test_pid_refinements.RefinementTests.test_injected_runtime_error_makes_competition_assertion_fail)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/test_pid_refinements.py", line 93, in test_injected_runtime_error_makes_competition_assertion_fail
+    with patch.object(state, 'reserve_experiment', side_effect=RuntimeError('injected audit fault')):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/unittest/mock.py", line 1467, in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/unittest/mock.py", line 1437, in get_original
+    raise AttributeError(
+AttributeError: <pid_transactions.PidTransactions object at 0x7fd925551910> does not have the attribute 'reserve_experiment'
+
+======================================================================
+ERROR: test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=('speed_kp',))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/test_pid_refinements.py", line 59, in test_invalid_inputs_are_atomic_and_recoverable
+    state.reserve(update)
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/pid_transactions.py", line 38, in reserve
+    self.status = self.describe(request) + '：已排入交易。'
+                  ^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/pid_transactions.py", line 45, in describe
+    return prefix + (f' {PARAMETERS[update[0]][1]} {update[1]} → {update[2]}' if update else ' 讀取板端')
+                                                    ~~~~~~^^^
+IndexError: tuple index out of range
+
+======================================================================
+ERROR: test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update='bad')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/test_pid_refinements.py", line 59, in test_invalid_inputs_are_atomic_and_recoverable
+    state.reserve(update)
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/pid_transactions.py", line 38, in reserve
+    self.status = self.describe(request) + '：已排入交易。'
+                  ^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/pid_transactions.py", line 45, in describe
+    return prefix + (f' {PARAMETERS[update[0]][1]} {update[1]} → {update[2]}' if update else ' 讀取板端')
+                         ~~~~~~~~~~^^^^^^^^^^^
+KeyError: 'b'
+
+======================================================================
+ERROR: test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=1)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/test_pid_refinements.py", line 59, in test_invalid_inputs_are_atomic_and_recoverable
+    state.reserve(update)
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/pid_transactions.py", line 37, in reserve
+    self.rows[update[0]] = '寫入中'
+              ~~~~~~^^^
+TypeError: 'int' object is not subscriptable
+
+======================================================================
+ERROR: test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update={'key': 'speed_kp'})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/test_pid_refinements.py", line 59, in test_invalid_inputs_are_atomic_and_recoverable
+    state.reserve(update)
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/pid_transactions.py", line 37, in reserve
+    self.rows[update[0]] = '寫入中'
+              ~~~~~~^^^
+KeyError: 0
+
+======================================================================
+ERROR: test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=('unknown', 0, 1))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/test_pid_refinements.py", line 59, in test_invalid_inputs_are_atomic_and_recoverable
+    state.reserve(update)
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/pid_transactions.py", line 38, in reserve
+    self.status = self.describe(request) + '：已排入交易。'
+                  ^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/pid_transactions.py", line 45, in describe
+    return prefix + (f' {PARAMETERS[update[0]][1]} {update[1]} → {update[2]}' if update else ' 讀取板端')
+                         ~~~~~~~~~~^^^^^^^^^^^
+KeyError: 'unknown'
+
+======================================================================
+ERROR: test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=([], 0, 1))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/test_pid_refinements.py", line 59, in test_invalid_inputs_are_atomic_and_recoverable
+    state.reserve(update)
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/pid_transactions.py", line 37, in reserve
+    self.rows[update[0]] = '寫入中'
+    ~~~~~~~~~^^^^^^^^^^^
+TypeError: unhashable type: 'list'
+
+======================================================================
+ERROR: test_release_preserves_uncertainty_and_reservation_can_recover (test_pid_refinements.RefinementTests.test_release_preserves_uncertainty_and_reservation_can_recover)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/test_pid_refinements.py", line 99, in test_release_preserves_uncertainty_and_reservation_can_recover
+    state.reserve_experiment()
+    ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'PidTransactions' object has no attribute 'reserve_experiment'
+
+======================================================================
+FAIL: test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=())
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/test_pid_refinements.py", line 58, in test_invalid_inputs_are_atomic_and_recoverable
+    with self.assertRaises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=('speed_kp', True, 1))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/test_pid_refinements.py", line 58, in test_invalid_inputs_are_atomic_and_recoverable
+    with self.assertRaises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=('speed_kp', '100', 101))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/test_pid_refinements.py", line 58, in test_invalid_inputs_are_atomic_and_recoverable
+    with self.assertRaises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=('speed_kp', 100, True))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/test_pid_refinements.py", line 58, in test_invalid_inputs_are_atomic_and_recoverable
+    with self.assertRaises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=('speed_kp', 100, 32768))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/test_pid_refinements.py", line 58, in test_invalid_inputs_are_atomic_and_recoverable
+    with self.assertRaises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=('speed_kp', 100, -1))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/test_pid_refinements.py", line 58, in test_invalid_inputs_are_atomic_and_recoverable
+    with self.assertRaises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=('speed_kp_div', 128, 3))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/test_pid_refinements.py", line 58, in test_invalid_inputs_are_atomic_and_recoverable
+    with self.assertRaises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_invalid_inputs_are_atomic_and_recoverable (test_pid_refinements.RefinementTests.test_invalid_inputs_are_atomic_and_recoverable) (update=('iq_reference_raw', 0, 1))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/test_pid_refinements.py", line 58, in test_invalid_inputs_are_atomic_and_recoverable
+    with self.assertRaises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_update_list_is_copied_and_signed_divisor_values_remain_valid (test_pid_refinements.RefinementTests.test_update_list_is_copied_and_signed_divisor_values_remain_valid)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/edfb6e811fa0/Robi_Integrated_Automation_v0.3.26/test_pid_refinements.py", line 82, in test_update_list_is_copied_and_signed_divisor_values_remain_valid
+    self.assertEqual(request['update'], ('observer_c1', -100, -101))
+AssertionError: ['observer_c1', -100, 999] != ('observer_c1', -100, -101)
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.003s
+
+FAILED (failures=9, errors=9)
